@@ -1,7 +1,6 @@
 import os
 import cv2
 import torch
-import torchio
 import logging
 import pandas as pd
 import numpy as np
@@ -181,16 +180,16 @@ class DefaultDataset(Dataset):
 				- img_size: (Int) Image size.
 	'''	    
 	def __getitem__(self, idx):	
-		tgt = load(self.data[idx]['SDCT'], id= self.data[idx]['Case'])
+		tgt = load(self.data[idx]['SDCT'], id=self.data[idx]['Case'])
 		
 		Id = tgt['Id']
-		metadata = tgt['Metadata']
+#		metadata = tgt['Metadata']
 		
 		tgt = self.preprocess(tgt['Image'])
 		tgt = torch.as_tensor(tgt.copy()).float().contiguous()
 		
 		if not self.train or not self.diff:
-			img = load(self.data[idx]['LDCT'], id= self.data[idx]['Case'])
+			img = load(self.data[idx]['LDCT'], id=self.data[idx]['Case'])
 			img = self.preprocess(img['Image'])
 			img = torch.as_tensor(img.copy()).float().contiguous()
 		
@@ -201,16 +200,16 @@ class DefaultDataset(Dataset):
 				tgt = self.transforms(tgt)
 			else:
 		    		img, tgt = self.transforms(img, tgt)
-		    
+		
 		# Image path
-		img_path = self.data[idx]['LDCT']
+		img_path = self.data[idx]['SDCT']
 		img_path = img_path[len(img_path)//2] if type(img_path)==list else img_path
 		
 		# Target Dictionary
 		target = {}
 		target['image'] = img if not self.train or not self.diff else []
 		target['target'] = tgt
-		target['metadata'] = metadata
+#		target['metadata'] = metadata
 		target['img_id'] = Id
 		target['img_path'] =  img_path
 		target['img_size'] = self.img_size
