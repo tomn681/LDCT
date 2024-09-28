@@ -350,6 +350,10 @@ class CombinationDataset(DefaultDataset):
 
 if __name__ == '__main__':
 
+	import matplotlib
+	import matplotlib.pyplot as plt
+	matplotlib.use('TkAgg')
+
 	dataset_dict = {'DefaultDataset': DefaultDataset, 
 			'CombinationDataset': CombinationDataset}
 	
@@ -358,15 +362,18 @@ if __name__ == '__main__':
 		print('-'*30)
 		print(f'\nTesting {dataset_name}:\n')
 		
-		path = os.path.join('../../manifest-1648648375084/', dataset_name)
+		path = os.path.join('../manifest-1648648375084/', dataset_name)
 
-		dataset = dataset_dict[dataset_name](path)
+		dataset = dataset_dict[dataset_name](path, s_cnt=1, norm=True)
 		#dataset = dataset_dict[dataset_name]('./test_imgs/')
 		
 		#print(dataset.getinfo())
 		
-		tgt = dataset[0]
-		img = tgt['image']
+		tgt = dataset[30]
+		img = tgt['target']
+		
+		plt.imshow(img.permute(1,2,0), cmap='Greys_r')
+		plt.show()
 		
 		print(img.shape)
 		

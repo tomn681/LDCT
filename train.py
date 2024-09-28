@@ -7,7 +7,7 @@ from config import config
 from tqdm.auto import tqdm
 from accelerate import Accelerator
 from accelerate import notebook_launcher
-from models.UNet2D import model as Unet2D
+from models.DiffUNet2D import model as Unet2D
 from diffusers.utils import make_image_grid
 from huggingface_hub import HfFolder, Repository, whoami
 from diffusers.optimization import get_cosine_schedule_with_warmup
