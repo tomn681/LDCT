@@ -18,7 +18,7 @@ from utils.dataset import DefaultDataset, CombinationDataset
 
 model = Unet2D
 
-dataset = DefaultDataset('../manifest-1648648375084/DefaultDataset_small', img_size=config.image_size, s_cnt=config.slices)
+dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices)
 
 loader_args = dict(batch_size=config.train_batch_size, num_workers=4, pin_memory=True)
 train_dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, **loader_args)
