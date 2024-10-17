@@ -361,7 +361,7 @@ if __name__ == '__main__':
 		print('-'*30)
 		print(f'\nTesting {dataset_name}:\n')
 		
-		path = os.path.join('../manifest-1648648375084/', dataset_name)
+		path = os.path.join('../', dataset_name)
 
 		dataset = dataset_dict[dataset_name](path, s_cnt=1, norm=True)
 		#dataset = dataset_dict[dataset_name]('./test_imgs/')

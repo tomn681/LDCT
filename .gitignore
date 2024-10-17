@@ -9,6 +9,8 @@ __pycache__/
 # Directories
 data/
 train/
+DefaultDataset/
+CombinationDataset/
 
 # Distribution / packaging
 .Python
