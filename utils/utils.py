@@ -130,16 +130,19 @@ Outputs:
 			- Metadata: (dict) File metadata. 
 			- Id: (String) Image set identification name or id.
 '''
-def load_composite(path_list, id=None, dim: int=3, metadata='first'):
+def load_composite(path_list, id=None, dim: int=3, metadata='first', multi_cpu=False):
 	assert dim in (2,3), "Dimension dim in load() must be an integer between 2 and 3"
 	assert metadata in ['first', 'last', None], f"Metadata option unavailable: {metadata}"
 	
 	files = []
 
-    	# Cargar imágenes en paralelo
-	with Pool(processes=cpu_count()) as pool:
-		# Leer las imágenes en paralelo
-		files = pool.map(load_image, path_list)
+	# Cargar imágenes en paralelo
+	if multi_cpu:
+		with Pool(processes=cpu_count()) as pool:
+			# Leer las imágenes en paralelo
+			files = pool.map(load_image, path_list)
+	else:
+		files = [load_image(f) for f in path_list]
 
 	# Filtrar los resultados nulos (si algún archivo no se pudo cargar)
 	files = [f for f in files if f is not None]
