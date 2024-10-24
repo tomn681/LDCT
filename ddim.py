@@ -23,12 +23,16 @@ to_pil = transforms.Compose([transforms.ToPILImage()])
 pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
 
 # Preparar la imagen de entrada
-def preprocess_image(image_path, id, image_size=128):
-    image = load(image_path, id)['Image']
-    image = (image * 255) // np.max(image)
-    image = Image.fromarray(image.astype(np.float32))
-    image = image.resize((image_size, image_size))  # Asegúrate de que la imagen tenga el tamaño esperado
-    return image
+def preprocess_image(image_path, id, image_size=512):
+    image = load(image_path, id)
+    slope = float(image['Metadata']['Rescale Slope'])
+    intersect = float(image['Metadata']['Rescale Intercept'])
+    image = image['Image']
+    #image = np.clip(image, 0, 400)
+    #image = (image - np.mean(image)) / np.std(image)
+    #image = Image.fromarray(image.astype(np.float32))
+    #image = image.resize((image_size, image_size))  # Asegúrate de que la imagen tenga el tamaño esperado
+    return image.astype(np.float32), (slope, intersect)
 
 # Sample function (regular DDIM)
 @torch.no_grad()
@@ -58,34 +62,29 @@ def sample(
         t = pipeline.scheduler.timesteps[i]
 
         # Expand the latents if we are doing classifier free guidance
-        latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
+        latent_model_input = torch.cat([latents] * 4) if do_classifier_free_guidance else latents
         latent_model_input = pipeline.scheduler.scale_model_input(latent_model_input, t)
 
         # Predict the noise residual
         noise_pred = pipeline.unet(latent_model_input, t).sample
 
         # Normally we'd rely on the scheduler to handle the update step:
-        # latents = pipeline.scheduler.step(noise_pred, t, latents).prev_sample
+        latents = pipeline.scheduler.step(noise_pred, t, latents).prev_sample
 
         # Instead, let's do it ourselves:
-        prev_t = max(1, t.item() - (1000 // num_inference_steps))  # t-1
-        alpha_t = pipeline.scheduler.alphas_cumprod[t.item()]
-        alpha_t_prev = pipeline.scheduler.alphas_cumprod[prev_t]
-        predicted_x0 = (latents - (1 - alpha_t).sqrt() * noise_pred) / alpha_t.sqrt()
-        direction_pointing_to_xt = (1 - alpha_t_prev).sqrt() * noise_pred
-        latents = alpha_t_prev.sqrt() * predicted_x0 + direction_pointing_to_xt
+#        prev_t = max(1, t.item() - (1000 // num_inference_steps))  # t-1
+#        alpha_t = pipeline.scheduler.alphas_cumprod[t.item()]
+#        alpha_t_prev = pipeline.scheduler.alphas_cumprod[prev_t]
+#        predicted_x0 = (latents - (1 - alpha_t).sqrt() * noise_pred) / alpha_t.sqrt()
+#        direction_pointing_to_xt = (1 - alpha_t_prev).sqrt() * noise_pred
+#        latents = alpha_t_prev.sqrt() * predicted_x0 + direction_pointing_to_xt
 
     # Post-processing
     #images = pipeline.decode_latents(latents)
-    print(latents.squeeze(0).cpu().numpy().shape)
-    images = latents.squeeze(0).cpu().numpy()
+    #print(latents.squeeze(0).cpu().numpy().shape)
+    images = latents.squeeze(0).cpu()#.numpy()
 
     return images
-    
-# Guardar o visualizar la imagen generada
-def save_image(output_image, output_path):
-    output_image = to_pil(output_image.squeeze(0))
-    output_image.save(output_path)
 
 if __name__ == "__main__":
     # Ruta a la imagen de entrada y salida
@@ -93,13 +92,36 @@ if __name__ == "__main__":
     output_image_path = "./imagen_generada.png"
 
     # Preprocesar la imagen
-    input_image = preprocess_image(input_image_path, input_image_path.split('/')[-1])
+    input_image, rescale = preprocess_image(input_image_path, input_image_path.split('/')[-1])
+    input_image = input_image * rescale[0] + rescale[1]
+    print(np.mean(input_image), np.max(input_image), np.min(input_image), rescale)
+    input_image_2=np.clip(input_image, -400, 400)
+    mean = input_image_2[input_image_2 > 0].mean()
+    std = input_image_2[input_image_2 > 0].std()
+    print(mean, std, np.max(input_image_2), np.min(input_image_2))
+    #input_image=np.clip(input_image, -400, 400)
+    input_image = (input_image - mean)/std
+    print(np.mean(input_image), np.max(input_image), np.min(input_image))
 
     # Generar una nueva imagen usando el modelo DDIM
     input_image = transform(input_image).unsqueeze(0)
+    
+    import matplotlib.pyplot as plt
+    #plt.imshow(input_image.squeeze(0).permute(1,2,0), cmap='Greys_r')
+    #plt.show()
+    
     output_image = sample(start_latents=input_image.to(device), pipeline=pipeline, device=device)
-
-    # Guardar la imagen generada
-    save_image(output_image, output_image_path)
+    
+    plt.imshow(input_image.squeeze(0).permute(1,2,0), cmap='Greys_r')
+    plt.axis('off')
+    plt.savefig("imagen.png")
+    
+    plt.imshow(output_image.permute(1,2,0), cmap='Greys_r')
+    plt.axis('off')
+    plt.savefig(output_image_path)
+    
+    #plt.imshow(input_image.squeeze(0).permute(1,2,0)*output_image.permute(1,2,0), cmap='Greys_r')
+    #plt.show()
+    
 
     print(f"Imagen generada guardada en {output_image_path}")
