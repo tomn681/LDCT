@@ -15,6 +15,7 @@ from utils.dataset import DefaultDataset
 
 import os
 import time
+import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -48,7 +49,7 @@ Inputs:
 		Optional
 			- model:		(str)       Model to train. Default: 'U-Net'
 			- loss:		(str)       Loss. Default: 'MSELoss'
-			- epochs:		(int)       Number of training epochs. Default: 10.
+			- epochs:		(int)       Number of training epochs. Default: 50.
 			- batch-size:		(int)       Training Batch Size. Default: 32.
 			- optimizer:		(str)       Optimizer. Default: 'Adam'.
 			- learning-rate:	(float)     Base learning Rate. Default: 1e-5.
@@ -84,7 +85,7 @@ def get_args():
 			choices=list(loss_dict.keys()))
 
 	# Training Config
-	parser.add_argument('--epochs', '-e', metavar='E', type=int, default=10, help='Number of epochs')
+	parser.add_argument('--epochs', '-e', metavar='E', type=int, default=50, help='Number of epochs')
 	parser.add_argument('--batch-size', '-b', dest='batch_size', metavar='B', type=int, default=32, help='Batch size')
 
 	# Optimizer Config
@@ -113,7 +114,7 @@ def get_args():
 	parser.add_argument('--semantic', action='store_true', default=False, help='Semantic Segmentation')
 	
 	# Save Checkpoints
-	parser.add_argument('--save-checkpoints', '-c', type=str, help='Checkpoints Directory', default='./train/unet', dest='save_checkpoint')
+	parser.add_argument('--save-checkpoints', '-c', type=str, help='Checkpoints Directory', default='./train/unet/', dest='save_checkpoint')
 
 	return parser.parse_args()
 	
@@ -312,48 +313,49 @@ if __name__ == '__main__':
 
 			if args.save_checkpoint:
 				Path(args.save_checkpoint).mkdir(parents=True, exist_ok=True)
-				torch.save(net.state_dict(), str(args.save_checkpoint + 'checkpoint_epoch{}.pth'.format(epoch)))
+				torch.save(net.state_dict(), str(args.save_checkpoint + f'checkpoint_epoch{epoch}-{datetime.datetime.now().isoformat()}.pth'))
 				logging.info(f'Checkpoint {epoch} saved!')
 			
 	except (KeyboardInterrupt, OSError):
 		pass
 	
-#	fig, ax = plt.subplots()
-#
-#	axes = [ax, ax.twinx()]
-#
-#	axes[-1].set_frame_on(True)
-#	axes[-1].patch.set_visible(False)
-#
-#	axes[0].plot(learnig_rate_val, linestyle='-', color='lightgray')
-#	axes[0].set_ylabel('Learning Rate', color='lightgray')
-#	axes[0].tick_params(axis='y', colors='lightgray')
-#	axes[0].yaxis.set_label_position('right')
-#	axes[0].yaxis.tick_right()
-#	axes[0].set_yscale('log')
-#
-#	validation_line, = axes[1].plot(validation_score, linestyle='-', color='Orange')
-#	axes[1].set_ylabel('Dice Score', color='Black')
-#	axes[1].tick_params(axis='y', colors='Black')
-#	axes[1].yaxis.set_label_position('left')
-#	axes[1].yaxis.tick_left()
-#
-#	train_line, = axes[1].plot(train_score, linestyle='-', color='Blue')
-#	
-#	batch_x_axis = [i/10 for i in range(len(batch_validation_score))]
-#	batch_validation_line, = axes[1].plot(batch_x_axis, batch_validation_score, linestyle='dotted', color='Orange')
-#
-#	train_line.set_label('Train')
-#	validation_line.set_label('Validation')
-#
-#	axes[1].legend()
-#	axes[1].set_title('Dice Score')
-#	axes[0].set_xlabel('Epoch')
-#	axes[1].set_ylim(0.0, 1.0)
-#	
-#	annot_max(np.array(validation_score), ax=axes[1])
-#	
-#	outpath = os.path.join(args.path, 'plots/')
-#	if not os.path.isdir(outpath):
-#		os.mkdir(outpath)
-#	plt.savefig(outpath + args.model + '-' + str(time.time()) + '.png')
+	fig, ax = plt.subplots()
+
+	axes = [ax, ax.twinx()]
+
+	axes[-1].set_frame_on(True)
+	axes[-1].patch.set_visible(False)
+
+	axes[0].plot(learnig_rate_val, linestyle='-', color='lightgray')
+	axes[0].set_ylabel('Learning Rate', color='lightgray')
+	axes[0].tick_params(axis='y', colors='lightgray')
+	axes[0].yaxis.set_label_position('right')
+	axes[0].yaxis.tick_right()
+	axes[0].set_yscale('log')
+
+	validation_line, = axes[1].plot(validation_score, linestyle='-', color='Orange')
+	axes[1].set_ylabel('Dice Score', color='Black')
+	axes[1].tick_params(axis='y', colors='Black')
+	axes[1].yaxis.set_label_position('left')
+	axes[1].yaxis.tick_left()
+
+	train_line, = axes[1].plot(train_score, linestyle='-', color='Blue')
+	
+	batch_x_axis = [i/10 for i in range(len(batch_validation_score))]
+	batch_validation_line, = axes[1].plot(batch_x_axis, batch_validation_score, linestyle='dotted', color='Orange')
+
+	train_line.set_label('Train')
+	validation_line.set_label('Validation')
+
+	axes[1].legend()
+	axes[1].set_title('Dice Score')
+	axes[0].set_xlabel('Epoch')
+	axes[1].set_ylim(0.0, 1.0)
+	
+	annot_max(np.array(validation_score), ax=axes[1])
+	
+	outpath = os.path.join(args.path, 'plots/')
+	if not os.path.isdir(outpath):
+		os.mkdir(outpath)
+	plt.savefig(outpath + args.model + '-' + str(time.time()) + '.png')
+

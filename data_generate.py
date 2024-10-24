@@ -12,7 +12,7 @@ def find_subfolder_paths(case_path, dose_type, folder_type):
 
 # Ruta principal donde se encuentran los casos
 root_path = '/home/data/LDCT/manifest-1648648375084/LDCT-and-Projection-data/'
-root_path = '/media/delas/RetinaRX/LDCT/manifest-1648648375084/LDCT-and-Projection-data/'
+#root_path = '/media/delas/RetinaRX/LDCT/manifest-1648648375084/LDCT-and-Projection-data/'
 
 # Inicializar una lista para almacenar la información de cada caso
 data = []
