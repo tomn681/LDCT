@@ -47,11 +47,17 @@ class DefaultDataset(Dataset):
 			
 		- diff: (Boolean) If True loads only target image for training, default=True.
 		
-		- norm: (bool) Wether or not apply normalization to input image to range 0-255.
+		- norm: (bool) Wether or not apply image standarization (x-mean/std).
+		
+		- mean: (float) Image pixel-wise mean value.
+		
+		- std: (float) Image pixel-wise std value.
 		 
-		- img_datatype: (np.dtype) Data type used for image normalization, default: np.uint8.
+		- img_datatype: (np.dtype) Data type used for image normalization, default: np.float32.
 		
 		- names: (list<String>) Column name identifiers. FOR INTERNAL USE. DO NOT MODIFY.
+		
+		- clip: NOT IMPLEMENTED VALUE
 			
 	Outputs:
 		- dataset: (DefaultDataset Object) Dataset Object containing the given data:
@@ -64,6 +70,9 @@ class DefaultDataset(Dataset):
 			 			       Keys: <Case>, <SDCT_path>, <LDCT_path>
 			 			       Value Types: String
 			 - self.size:		Amount of images containing in the dataset
+			 - self.norm:		Wether or not apply image standarization (x-mean/std)
+			 - self. mean:		Image pixel-wise mean value
+			 - self.std: 		Image pixel-wise std value
 			 - self.img_datatype:	Data type for normalization, if active.
 			 
 			Methods:
@@ -74,8 +83,8 @@ class DefaultDataset(Dataset):
 			 
 			Note: For further details, methods are explained in it's corresponding class
 	'''
-	def __init__(self, file_path: str, s_cnt: int=3, img_size: int=512, norm=True, img_datatype=np.uint8,
-			train=True, diff=True, transforms=None, names=('Case','SDCT','LDCT',)):
+	def __init__(self, file_path: str, s_cnt: int=3, img_size: int=512, norm=True, mean=None, std=None, img_datatype=np.float32,
+			train=True, diff=True, transforms=None, names=('Case','SDCT','LDCT',), clip=None):
 	
 		super(DefaultDataset, self).__init__()
 		
@@ -115,6 +124,14 @@ class DefaultDataset(Dataset):
 		
 		# Ensure not empty
 		assert 0 < self.size, 'Empty Dataset'
+		
+		self.clip = clip
+		
+		self.mean = mean
+		self.std = std
+		
+		if not mean or not std:
+			self.mean, self.std = self.update_mean_std()
 			
 		# Log the dataset creation
 		logging.info(f'Creating {"Train" if train else "Test"} dataset with {self.size} examples.')
@@ -140,22 +157,39 @@ class DefaultDataset(Dataset):
 	Standard preprocessing for image resizing and normalization.
 	
 	Inputs:
-		- img_ndarray: (np.ndarray) Image.
+		- dcm_img: (dict) DICOM Image Dictionary.
+			Keys:
+				- 'Image' (np.ndarray): Loaded image.
+				- 'Metadata' (dict): DICOM Metadata. If None image is used as is.
+				- 'Id' (String): Image UNIQUE ID. Not shareable within study.
+				
+				** Metadata must include 'Rescale Slope' and 'Rescale Intercept'.
+				
 		- dim: (Int) Image Dimension, default=3.
 	
 	Outputs:
 		- img_ndarray: (np.ndarray) Preprocessed image.
 	'''
-	def preprocess(self, img_ndarray, dim: int=3):
+	def preprocess(self, dcm_img, dim: int=3):
 		assert dim in (2,3), "Dimension dim in load() must be an integer between 2 and 3" 
 		# Resize
+		img_ndarray = dcm_img['Image']
+		
+		if dcm_img['Metadata'] is not None:
+			# Rescale Factors for Hounsfield Units
+			slope = float(dcm_img['Metadata']['Rescale Slope'])
+			intersect = float(dcm_img['Metadata']['Rescale Intercept'])
+		
+			# Rescale image to Hounsfield Units
+			img_ndarray = img_ndarray * slope + intersect
+		
 		if self.img_size and dim==3:
 			img_ndarray = np.transpose(img_ndarray, (1, 2, 0))
 			img_ndarray = resize(img_ndarray, self.img_size)
 			img_ndarray = np.transpose(img_ndarray, (2, 0, 1))
 		
 		if self.norm:
-			img_ndarray = (img_ndarray * 255) // np.max(img_ndarray)
+			img_ndarray = (img_ndarray - self.mean) / self.std
 			img_ndarray = img_ndarray.astype(self.img_datatype)
 
 		return img_ndarray
@@ -183,14 +217,14 @@ class DefaultDataset(Dataset):
 		tgt = load(self.data[idx]['SDCT'], id=self.data[idx]['Case'])
 		
 		Id = tgt['Id']
-#		metadata = tgt['Metadata']
+		#metadata = tgt['Metadata']
 		
-		tgt = self.preprocess(tgt['Image'])
+		tgt = self.preprocess(tgt)
 		tgt = torch.as_tensor(tgt.copy()).float().contiguous()
 		
 		if not self.train or not self.diff:
 			img = load(self.data[idx]['LDCT'], id=self.data[idx]['Case'])
-			img = self.preprocess(img['Image'])
+			img = self.preprocess(img)
 			img = torch.as_tensor(img.copy()).float().contiguous()
 		
 		
@@ -209,37 +243,62 @@ class DefaultDataset(Dataset):
 		target = {}
 		target['image'] = img if not self.train or not self.diff else []
 		target['target'] = tgt
-#		target['metadata'] = metadata
+		#target['metadata'] = metadata
 		target['img_id'] = Id
 		target['img_path'] =  img_path
 		target['img_size'] = self.img_size
 		
 		return target
 		
-#	'''
-#	getinfo Method
-#	
-#	Retrieves the basic dataset information.
-#	
-#	Inputs:
-#		- None
-#	
-#	Outputs:
-#		- target: (dict)
-#			Keys:
-#				- n_classes: (int) number of detected classes
-#				- n_objects: (int) maximum number of detected objects
-#				- n_channels: (int) number of detected channels
-#				- img_size: (int) image size
-#	'''
-#	def getinfo(self):
-#		info = {}
-#		info['n_classes'] = self.classes
-#		info['img_datatype'] = self.img_datatype
-#		info['n_channels'] = self.channels
-#		info['n_images'] = self.size
-#		
-#		return info	
+	'''
+	update_mean_std Method
+	
+	Calculates pixel-wise mean and standard deviation.
+	
+	Inputs:
+		- None
+	
+	Outputs:
+		- mean: (np.float32) pixel-wise mean
+		- std: (np.float32) pixel-wise std
+	'''
+	def update_mean_std(self):
+		mean = 0.0
+		var = 0.0
+		count = 0
+
+		for idx in range(len(self)):
+			# Cargar la imagen
+			tgt = load(self.data[idx]['SDCT'], id=self.data[idx]['Case'])['Image']
+			tgt = tgt.astype(np.float32)
+			
+			tgt=np.clip(tgt, -400, 400)    ###
+
+			# Mean and Variance
+			image_mean = np.mean(tgt)
+			image_var = np.var(tgt)
+			
+			n_pixels = tgt.size/1000
+
+			# Update mean and pixel count
+			new_count = count + n_pixels
+			new_mean = (mean * count + image_mean * n_pixels) / new_count
+
+			# Calcular el delta entre la nueva media y la media anterior
+			delta = image_mean - mean
+
+			# Actualizar la varianza acumulada
+			new_var = (var * count + image_var * n_pixels + delta**2 * count * n_pixels / new_count) / new_count
+
+			# Actualizar los valores de media, varianza y cantidad de píxeles procesados
+			mean = new_mean
+			var = new_var
+			count = new_count
+
+		# Al finalizar el ciclo, calcular la desviación estándar
+		std = np.sqrt(var)
+		
+		return mean, std	
 		
 		
 '''
@@ -304,11 +363,12 @@ class CombinationDataset(DefaultDataset):
 			 
 			Note: For further details, methods are explained in it's corresponding class
 	'''
-	def __init__(self, file_path: str, s_cnt: int=3, img_size: int=512, norm=True, img_datatype=np.uint8,
-			train=True, transforms=None, names=('Case','SDCT','LDCT','SDRAW','LDRAW')):
+	def __init__(self, file_path: str, s_cnt: int=3, img_size: int=512, norm=True, mean=None, std=None, 
+		img_datatype=np.float32, train=True, transforms=None, names=('Case','SDCT','LDCT','SDRAW','LDRAW'), 
+		clip=None):
 	
-		super(CombinationDataset, self).__init__(file_path, s_cnt, img_size, norm, 
-			img_datatype, train, transforms, names)
+		super(CombinationDataset, self).__init__(file_path, s_cnt, img_size, norm, mean, std, 
+			img_datatype, train, transforms, names, clip)
 
 	'''
 	getitem Method
@@ -363,7 +423,7 @@ if __name__ == '__main__':
 		
 		path = os.path.join('../', dataset_name)
 
-		dataset = dataset_dict[dataset_name](path, s_cnt=1, norm=True)
+		dataset = dataset_dict[dataset_name](path, s_cnt=1, norm=True, mean=212.27582291942343, std=170.61692840418837)
 		#dataset = dataset_dict[dataset_name]('./test_imgs/')
 		
 		#print(dataset.getinfo())
