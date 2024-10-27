@@ -11,6 +11,9 @@ class TrainingConfig:
 	
 	image_size = 128  # the generated image resolution
 	
+	image_mean = 212.27582291942343
+	image_std = 170.61692840418837
+	
 	train_batch_size = 16
 	eval_batch_size = 16  # how many images to sample during evaluation
 	

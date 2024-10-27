@@ -217,7 +217,7 @@ class DefaultDataset(Dataset):
 		tgt = load(self.data[idx]['SDCT'], id=self.data[idx]['Case'])
 		
 		Id = tgt['Id']
-		metadata = tgt['Metadata']
+		#metadata = tgt['Metadata']
 		
 		tgt = self.preprocess(tgt)
 		tgt = torch.as_tensor(tgt.copy()).float().contiguous()
@@ -243,7 +243,7 @@ class DefaultDataset(Dataset):
 		target = {}
 		target['image'] = img if not self.train or not self.diff else []
 		target['target'] = tgt
-		target['metadata'] = metadata
+		#target['metadata'] = metadata
 		target['img_id'] = Id
 		target['img_path'] =  img_path
 		target['img_size'] = self.img_size
@@ -364,7 +364,8 @@ class CombinationDataset(DefaultDataset):
 			Note: For further details, methods are explained in it's corresponding class
 	'''
 	def __init__(self, file_path: str, s_cnt: int=3, img_size: int=512, norm=True, mean=None, std=None, 
-		img_datatype=np.float32, train=True, transforms=None, names=('Case','SDCT','LDCT','SDRAW','LDRAW'), clip=None):
+		img_datatype=np.float32, train=True, transforms=None, names=('Case','SDCT','LDCT','SDRAW','LDRAW'), 
+		clip=None):
 	
 		super(CombinationDataset, self).__init__(file_path, s_cnt, img_size, norm, mean, std, 
 			img_datatype, train, transforms, names, clip)

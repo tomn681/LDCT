@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from PIL import Image
+from functools import partial
 from multiprocessing import Pool, cpu_count
 
 '''
@@ -90,6 +91,7 @@ def load_image(path, id=None):
 	if ext == '.dcm':
 		image = pydicom.dcmread(path)
 		
+		# Ignore images and missing keys
 		metadata = {str(element.name): str(element.value) \
 			for element in image \
 			if element.name != 'Pixel Data'}
@@ -140,7 +142,7 @@ def load_composite(path_list, id=None, dim: int=3, metadata='first', multi_cpu=F
 	if multi_cpu:
 		with Pool(processes=cpu_count()) as pool:
 			# Leer las imágenes en paralelo
-			files = pool.map(load_image, path_list)
+			files = pool.map(load_image, path_list)	
 	else:
 		files = [load_image(f) for f in path_list]
 
