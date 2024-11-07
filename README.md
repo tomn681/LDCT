@@ -10,3 +10,7 @@ pip install diffusers[training]
 ```python 
 !pip install diffusers[training]
 ```
+
+```shell
+python train_unet.py -fp "./DefaultDataset" -b 16 -lr 0.001
+```

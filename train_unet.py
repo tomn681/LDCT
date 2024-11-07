@@ -203,7 +203,7 @@ if __name__ == '__main__':
 	
 	# 3. Initialize Training Modules
 	optimizer = optimizer_dict[args.opt](net.parameters(), lr=args.lr)#, weight_decay=1e-8, momentum=0.9)
-	scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=2, factor=0.5)
+	scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5)
 	#scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.216)#step15gamma0.1
 	#scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.8)
 	grad_scaler = torch.cuda.amp.GradScaler(enabled=args.amp)
