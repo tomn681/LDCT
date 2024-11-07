@@ -61,7 +61,7 @@ Inputs:
 			- bilinear:		(bool)      Use bilinear upsampling if applicable. Default: False.
 			- disable-cuda:	(bool)      Disable GPU. Default: False.
 			- semantic:		(str)       Semantic Segmentation. Default: True.
-			- save-checkpoints	(str)       Checkpoints directory. Default: Discard Checkpoints.
+			- save-checkpoints	(str)       Checkpoints directory. Default: ./train/unet/.
 		
 		Note: Semantic segmentation has n_classes outputs. Non-semantic methods could present more than one 
 		      object per class. Semantic = False allows the net to output as many masks as objects are in the

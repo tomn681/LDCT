@@ -2,6 +2,7 @@ import torch
 import numpy as np
 
 from PIL import Image
+from config import config
 from tqdm.auto import tqdm
 from diffusers import DDIMPipeline, DiffusionPipeline, DDIMScheduler
 
@@ -13,7 +14,7 @@ if torch.cuda.is_available():
     device = "cuda"
 
 # Cargar el modelo entrenado de Hugging Face
-model_path = "../ddim-no-128-1-42-2024-09-09-17:15/"  # Asegúrate de colocar la ruta correcta
+model_path = "../ddim-no-128-1-42-2024-03-11-21:54/"  # Asegúrate de colocar la ruta correcta
 pipeline = DiffusionPipeline.from_pretrained(model_path, use_safetensors=True).to(device)
 
 transform = transforms.Compose([transforms.ToTensor()])
@@ -28,10 +29,6 @@ def preprocess_image(image_path, id, image_size=512):
     slope = float(image['Metadata']['Rescale Slope'])
     intersect = float(image['Metadata']['Rescale Intercept'])
     image = image['Image']
-    #image = np.clip(image, 0, 400)
-    #image = (image - np.mean(image)) / np.std(image)
-    #image = Image.fromarray(image.astype(np.float32))
-    #image = image.resize((image_size, image_size))  # Asegúrate de que la imagen tenga el tamaño esperado
     return image.astype(np.float32), (slope, intersect)
 
 # Sample function (regular DDIM)
@@ -71,17 +68,6 @@ def sample(
         # Normally we'd rely on the scheduler to handle the update step:
         latents = pipeline.scheduler.step(noise_pred, t, latents).prev_sample
 
-        # Instead, let's do it ourselves:
-#        prev_t = max(1, t.item() - (1000 // num_inference_steps))  # t-1
-#        alpha_t = pipeline.scheduler.alphas_cumprod[t.item()]
-#        alpha_t_prev = pipeline.scheduler.alphas_cumprod[prev_t]
-#        predicted_x0 = (latents - (1 - alpha_t).sqrt() * noise_pred) / alpha_t.sqrt()
-#        direction_pointing_to_xt = (1 - alpha_t_prev).sqrt() * noise_pred
-#        latents = alpha_t_prev.sqrt() * predicted_x0 + direction_pointing_to_xt
-
-    # Post-processing
-    #images = pipeline.decode_latents(latents)
-    #print(latents.squeeze(0).cpu().numpy().shape)
     images = latents.squeeze(0).cpu()#.numpy()
 
     return images
@@ -94,14 +80,7 @@ if __name__ == "__main__":
     # Preprocesar la imagen
     input_image, rescale = preprocess_image(input_image_path, input_image_path.split('/')[-1])
     input_image = input_image * rescale[0] + rescale[1]
-    print(np.mean(input_image), np.max(input_image), np.min(input_image), rescale)
-    input_image_2=np.clip(input_image, -400, 400)
-    mean = input_image_2[input_image_2 > 0].mean()
-    std = input_image_2[input_image_2 > 0].std()
-    print(mean, std, np.max(input_image_2), np.min(input_image_2))
-    #input_image=np.clip(input_image, -400, 400)
-    input_image = (input_image - mean)/std
-    print(np.mean(input_image), np.max(input_image), np.min(input_image))
+    input_image = (input_image - config.image_mean)/config.image_std
 
     # Generar una nueva imagen usando el modelo DDIM
     input_image = transform(input_image).unsqueeze(0)
