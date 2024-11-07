@@ -17,7 +17,7 @@ class TrainingConfig:
 	train_batch_size = 16
 	eval_batch_size = 16  # how many images to sample during evaluation
 	
-	num_epochs = 50
+	num_epochs = 350
 	num_train_timesteps = 1000
 	
 	model_name = "DDIM"
