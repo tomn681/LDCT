@@ -170,7 +170,7 @@ class DefaultDataset(Dataset):
 	Outputs:
 		- img_ndarray: (np.ndarray) Preprocessed image.
 	'''
-	def preprocess(self, dcm_img, dim: int=3):
+	def preprocess(self, dcm_img, dim: int=3, MIN_B=-1024, MAX_B=3072):
 		assert dim in (2,3), "Dimension dim in load() must be an integer between 2 and 3" 
 		# Resize
 		img_ndarray = dcm_img['Image']
@@ -189,7 +189,9 @@ class DefaultDataset(Dataset):
 			img_ndarray = np.transpose(img_ndarray, (2, 0, 1))
 		
 		if self.norm:
-			img_ndarray = (img_ndarray - self.mean) / self.std
+#			img_ndarray = (img_ndarray - self.mean) / self.std
+#			img_ndarray = img_ndarray.astype(self.img_datatype)
+			img_ndarray = (img_ndarray - MIN_B)/(MAX_B - MIN_B)
 			img_ndarray = img_ndarray.astype(self.img_datatype)
 
 		return img_ndarray
