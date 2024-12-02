@@ -19,6 +19,7 @@ from utils.dataset import DefaultDataset, CombinationDataset
 model = Unet2D
 
 dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices, mean=config.image_mean, std=config.image_std)
+print(len(dataset))
 
 loader_args = dict(batch_size=config.train_batch_size, num_workers=4, pin_memory=True)
 train_dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, **loader_args)
@@ -126,7 +127,7 @@ def evaluate(config, epoch, pipeline):
     ).images
 
     # Make a grid out of the images
-    image_grid = make_image_grid(images, rows=4, cols=4)
+    image_grid = make_image_grid(images, rows=config.eval_batch_size//4, cols=4)
 
     # Save the images
     test_dir = os.path.join(config.output_dir, "samples")
