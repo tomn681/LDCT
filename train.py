@@ -18,11 +18,10 @@ from utils.dataset import DefaultDataset, CombinationDataset
 
 model = Unet2D
 
-dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices, mean=config.image_mean, std=config.image_std)
-print(len(dataset))
+dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices)
 
 loader_args = dict(batch_size=config.train_batch_size, num_workers=4, pin_memory=True)
-train_dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, **loader_args)
+train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.train_batch_size, shuffle=True)
 
 noise_scheduler = config.scheduler(num_train_timesteps = config.num_train_timesteps)
 
@@ -146,8 +145,6 @@ preprocess = transforms.Compose([
 	transforms.ToTensor(),
 	transforms.Normalize([0.5], [0.5]),
 	])
-	
-train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.train_batch_size, shuffle=True)
 
 
 if __name__ == '__main__':

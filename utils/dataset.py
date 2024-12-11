@@ -47,11 +47,7 @@ class DefaultDataset(Dataset):
 			
 		- diff: (Boolean) If True loads only target image for training, default=True.
 		
-		- norm: (bool) Wether or not apply image standarization (x-mean/std).
-		
-		- mean: (float) Image pixel-wise mean value.
-		
-		- std: (float) Image pixel-wise std value.
+		- norm: (bool) Weather or not apply image normalization.
 		 
 		- img_datatype: (np.dtype) Data type used for image normalization, default: np.float32.
 		
@@ -70,9 +66,7 @@ class DefaultDataset(Dataset):
 			 			       Keys: <Case>, <SDCT_path>, <LDCT_path>
 			 			       Value Types: String
 			 - self.size:		Amount of images containing in the dataset
-			 - self.norm:		Wether or not apply image standarization (x-mean/std)
-			 - self. mean:		Image pixel-wise mean value
-			 - self.std: 		Image pixel-wise std value
+			 - self.norm:		Weather or not apply image normalization.
 			 - self.img_datatype:	Data type for normalization, if active.
 			 
 			Methods:
@@ -83,7 +77,7 @@ class DefaultDataset(Dataset):
 			 
 			Note: For further details, methods are explained in it's corresponding class
 	'''
-	def __init__(self, file_path: str, s_cnt: int=3, img_size: int=512, norm=True, mean=None, std=None, img_datatype=np.float32,
+	def __init__(self, file_path: str, s_cnt: int=3, img_size: int=512, norm=True, img_datatype=np.float32,
 			train=True, diff=True, transforms=None, names=('Case','SDCT','LDCT',), clip=None):
 	
 		super(DefaultDataset, self).__init__()
@@ -126,12 +120,6 @@ class DefaultDataset(Dataset):
 		assert 0 < self.size, 'Empty Dataset'
 		
 		self.clip = clip
-		
-		self.mean = mean
-		self.std = std
-		
-		if not mean or not std:
-			self.mean, self.std = self.update_mean_std()
 			
 		# Log the dataset creation
 		logging.info(f'Creating {"Train" if train else "Test"} dataset with {self.size} examples.')
@@ -189,8 +177,6 @@ class DefaultDataset(Dataset):
 			img_ndarray = np.transpose(img_ndarray, (2, 0, 1))
 		
 		if self.norm:
-#			img_ndarray = (img_ndarray - self.mean) / self.std
-#			img_ndarray = img_ndarray.astype(self.img_datatype)
 			img_ndarray = (img_ndarray - MIN_B)/(MAX_B - MIN_B)
 			img_ndarray = img_ndarray.astype(self.img_datatype)
 
@@ -251,57 +237,6 @@ class DefaultDataset(Dataset):
 		target['img_size'] = self.img_size
 		
 		return target
-		
-	'''
-	update_mean_std Method
-	
-	Calculates pixel-wise mean and standard deviation.
-	
-	Inputs:
-		- None
-	
-	Outputs:
-		- mean: (np.float32) pixel-wise mean
-		- std: (np.float32) pixel-wise std
-	'''
-	def update_mean_std(self):
-		mean = 0.0
-		var = 0.0
-		count = 0
-
-		for idx in range(len(self)):
-			# Cargar la imagen
-			tgt = load(self.data[idx]['SDCT'], id=self.data[idx]['Case'])['Image']
-			tgt = tgt.astype(np.float32)
-			
-			tgt=np.clip(tgt, -400, 400)    ###
-
-			# Mean and Variance
-			image_mean = np.mean(tgt)
-			image_var = np.var(tgt)
-			
-			n_pixels = tgt.size/1000
-
-			# Update mean and pixel count
-			new_count = count + n_pixels
-			new_mean = (mean * count + image_mean * n_pixels) / new_count
-
-			# Calcular el delta entre la nueva media y la media anterior
-			delta = image_mean - mean
-
-			# Actualizar la varianza acumulada
-			new_var = (var * count + image_var * n_pixels + delta**2 * count * n_pixels / new_count) / new_count
-
-			# Actualizar los valores de media, varianza y cantidad de píxeles procesados
-			mean = new_mean
-			var = new_var
-			count = new_count
-
-		# Al finalizar el ciclo, calcular la desviación estándar
-		std = np.sqrt(var)
-		
-		return mean, std	
-		
 		
 '''
 Class CombinationDataset:
@@ -365,11 +300,11 @@ class CombinationDataset(DefaultDataset):
 			 
 			Note: For further details, methods are explained in it's corresponding class
 	'''
-	def __init__(self, file_path: str, s_cnt: int=3, img_size: int=512, norm=True, mean=None, std=None, 
+	def __init__(self, file_path: str, s_cnt: int=3, img_size: int=512, norm=True, 
 		img_datatype=np.float32, train=True, transforms=None, names=('Case','SDCT','LDCT','SDRAW','LDRAW'), 
 		clip=None):
 	
-		super(CombinationDataset, self).__init__(file_path, s_cnt, img_size, norm, mean, std, 
+		super(CombinationDataset, self).__init__(file_path, s_cnt, img_size, norm,
 			img_datatype, train, transforms, names, clip)
 
 	'''
@@ -425,7 +360,7 @@ if __name__ == '__main__':
 		
 		path = os.path.join('../', dataset_name)
 
-		dataset = dataset_dict[dataset_name](path, s_cnt=1, norm=True, mean=212.27582291942343, std=170.61692840418837)
+		dataset = dataset_dict[dataset_name](path, s_cnt=1, norm=True)
 		#dataset = dataset_dict[dataset_name]('./test_imgs/')
 		
 		#print(dataset.getinfo())
