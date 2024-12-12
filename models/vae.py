@@ -6,17 +6,21 @@ sys.path.append('../')
 
 from utils.loss import VariationalLoss
 
+from .model import BaseModel
+
 from tqdm.auto import tqdm
 from accelerate import Accelerator
 from diffusers import AutoencoderKL
+from diffusers.utils import make_image_grid
 from diffusers.models.autoencoders.vae import DecoderOutput
+from torchvision.transforms.functional import to_pil_image
 
 from typing import Dict, Optional, Tuple, Union
 
-class VAE(AutoencoderKL): 
+class VAE(AutoencoderKL, BaseModel): 
 
     def __init__(self, in_channels=1, out_channels=1):
-        super().__init__(in_channels, out_channels)
+        super(VAE, self).__init__(in_channels, out_channels)
 
     def forward(
         self,
@@ -96,3 +100,15 @@ class VAE(AutoencoderKL):
                 progress_bar.set_postfix(**logs)
                 accelerator.log(logs, step=global_step)
                 global_step += 1
+                
+            # After each epoch you optionally sample some demo images with evaluate() and save the model
+            if accelerator.is_main_process:
+                if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
+                    images = output.sample[:4]
+                    images = [to_pil_image(image) for image in images]
+                    image_grid = make_image_grid(images, rows=1, cols=len(images))
+                    test_dir = os.path.join(config.output_dir, "samples")
+                    os.makedirs(test_dir, exist_ok=True)
+                    image_grid.save(f"{test_dir}/{epoch:04d}.png")
+                if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
+                    self.save_pretrained(config.output_dir, model=accelerator.unwrap_model(model))
