@@ -41,9 +41,6 @@ class TrainingConfig:
 	hub_private_repo = False
 	overwrite_output_dir = False  # overwrite the old model when re-running the notebook
 	
-	if conditioning == "concatenate":
-	    channels = channels*2
-	
 	output_dir = f"train/{model_name.lower()}-{mixed_precision}-{image_size}-{slices}-{seed}-{time.strftime('%Y-%d-%m-%H:%M', time.localtime(time.time()))}"  # the model name locally and on the HF Hub
 	
 config = TrainingConfig()
