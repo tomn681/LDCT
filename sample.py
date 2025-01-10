@@ -1,19 +1,21 @@
 from typing import List, Optional, Tuple, Union
 
+import time
 import torch
 from skimage.transform import resize
 
 from utils.sampler import SamplingPipeline
 import numpy as np
 
-from diffusers import DiffusionPipeline, ImagePipelineOutput
+from diffusers import DiffusionPipeline, ImagePipelineOutput, DDIMInverseScheduler
 from diffusers.utils.torch_utils import randn_tensor
 
 from config import config
 from utils.utils import load
+from utils.ssim import StructuralSimilarity
 from utils.dataset import DefaultDataset, CombinationDataset
 
-from torcheval.metrics import PeakSignalNoiseRatio, StructuralSimilarity, MeanSquaredError
+from torcheval.metrics import PeakSignalNoiseRatio, MeanSquaredError, Throughput
 
 #######################################################################
 import matplotlib.pyplot as plt
@@ -27,6 +29,7 @@ def evaluate(pipeline, path, model_path):
     psnr = PeakSignalNoiseRatio()
     ssim = StructuralSimilarity()
     mse = MeanSquaredError()
+    throughput_metric = Throughput()
 
     dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices, train=False)
 
@@ -34,27 +37,35 @@ def evaluate(pipeline, path, model_path):
     test_dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, **loader_args)
     
     for idx, batch in enumerate(test_dataloader):
-
+    
+        start_time = time.time()
         output = pipeline(num_inference_steps=config.num_inference_steps, num_noise_steps=None, batch_size=config.eval_batch_size, output_type='np.array', images=batch).images#.squeeze()
+        end_time = time.time()
+
         output = torch.from_numpy(output).permute(0,3,1,2)
 
         input_img = pipeline.preprocess(batch)#.squeeze()
         
+        elapsed_time = end_time - start_time
+        throughput_metric.update(num_processed=batch['image'].shape[0], elapsed_time_sec=elapsed_time)
+        
         for img, out in zip(input_img, output):
             psnr.update(img, out)
-            #ssim.update(img, out)
+            ssim.update(img, out)
             mse.update(img.flatten(), out.flatten())
         
-        os.mkdir(os.path.join(model_path, "test")) 
-        plot_input_output_batches(batch["target"].numpy(), output.numpy(), save=f"{model_path}/test/Batch-{idx}.png")
-
+        #os.mkdir(os.path.join(model_path, "test")) #Move to plot_input_...
+        plot_input_output_batches(batch["image"].numpy(), output.numpy())#, save=f"{model_path}/test/Batch-{idx}.png")
+        break
+        
     PSNR = psnr.compute()
     SSIM = ssim.compute()
     RMSE = np.sqrt(mse.compute())
+    THROUGHPUT = throughput_metric.compute()
 
-    return PSNR, SSIM, RMSE
+    return PSNR, RMSE, SSIM, THROUGHPUT
 
-def plot_input_output_batches(input_batch, output_batch, save=None):
+def plot_input_output_batches(input_batch, output_batch, save=False):
     """
     Plots input and output images in a grid format.
 
@@ -116,9 +127,17 @@ if __name__ == '__main__':
    
     device = 'cuda'
     
-    model_path = "../ddim-no-256-1-42-2024-02-12-15:43" #"../ddim-no-256-1-42-2024-02-12-15:43"
+    model_path = "../ddpm-no-256-1-42-2024-02-12-15:42" #"../ddim-no-256-1-42-2024-02-12-15:43"
+    #model_path = "../ddpm-no-512-1-42-2024-12-12-21:35"
     
     pipeline = SamplingPipeline.from_pretrained(model_path, use_safetensors=True).to(device)
+    
+    #pipeline.inverse_scheduler = None
+    #pipeline.inverse_scheduler = 'skip'
+    pipeline.inverse_scheduler = DDIMInverseScheduler.from_pretrained(model_path+"/scheduler/")
+    
+    
+    pipeline.scheduler = config.scheduler.from_pretrained(model_path+"/scheduler/")
     
     path = "./DefaultDataset/test.txt"
     print(evaluate(pipeline, path, model_path))

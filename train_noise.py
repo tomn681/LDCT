@@ -18,7 +18,7 @@ from utils.dataset import DefaultDataset, CombinationDataset
 
 model = Unet2D
 
-dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices)
+dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices, diff=False)
 
 loader_args = dict(batch_size=config.train_batch_size, num_workers=4, pin_memory=True)
 train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.train_batch_size, shuffle=True)
@@ -76,9 +76,10 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
 
         for step, batch in enumerate(train_dataloader):
             clean_images = batch["target"]
+            low_dose_images = batch["image"]
             
             # Sample noise to add to the images
-            noise = torch.randn(clean_images.shape).to(clean_images.device)
+            noise = low_dose_images - clean_images
             bs = clean_images.shape[0]
             
             # Sample a random timestep for each image
@@ -89,9 +90,6 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             # Add noise to the clean images according to the noise magnitude at each timestep
             # (this is the forward diffusion process)
             noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
-            
-            if config.conditioning == "concatenate":
-                noisy_images = torch.cat((noisy_images, clean_images), dim=1)
             
             with accelerator.accumulate(model):
                 # Predict the noise residual

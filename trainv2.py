@@ -37,4 +37,4 @@ lr_scheduler = get_cosine_schedule_with_warmup(
 #model.train_model(optimizer, config.num_epochs, "cuda")
 
 print(model)
-print(model.train_model(train_dataloader, optimizer, lr_scheduler, 1, "cuda", config))
+print(model.train_model(train_dataloader, optimizer, lr_scheduler, config.num_epochs, "cuda", config))

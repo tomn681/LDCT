@@ -158,7 +158,7 @@ class DefaultDataset(Dataset):
 	Outputs:
 		- img_ndarray: (np.ndarray) Preprocessed image.
 	'''
-	def preprocess(self, dcm_img, dim: int=3, MIN_B=-1024, MAX_B=3072):
+	def preprocess(self, dcm_img, dim: int=3, MIN_B=-1024, MAX_B=3072, slope=1.0, intersept=-1024):
 		assert dim in (2,3), "Dimension dim in load() must be an integer between 2 and 3" 
 		# Resize
 		img_ndarray = dcm_img['Image']
@@ -166,10 +166,10 @@ class DefaultDataset(Dataset):
 		if dcm_img['Metadata'] is not None:
 			# Rescale Factors for Hounsfield Units
 			slope = float(dcm_img['Metadata']['Rescale Slope'])
-			intersect = float(dcm_img['Metadata']['Rescale Intercept'])
+			intersept = float(dcm_img['Metadata']['Rescale Intercept'])
 		
-			# Rescale image to Hounsfield Units
-			img_ndarray = img_ndarray * slope + intersect
+		# Rescale image to Hounsfield Units
+		img_ndarray = img_ndarray * slope + intersept
 		
 		if self.img_size and dim==3:
 			img_ndarray = np.transpose(img_ndarray, (1, 2, 0))
