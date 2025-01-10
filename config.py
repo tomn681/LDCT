@@ -11,7 +11,7 @@ class TrainingConfig:
 	
 	image_size = 256  # the generated image resolution
 	
-	train_batch_size = 32
+	train_batch_size = 16
 	eval_batch_size = 4#16  # how many images to sample during evaluation
 	
 	num_epochs = 500
