@@ -22,7 +22,7 @@ class TrainingConfig:
 	scheduler = DDPMScheduler#EDMEulerScheduler
 	pipeline = DDPMPipeline #DDPM as Default for most schedulers
 	
-	conditioning = "concatenate" #"concatenate", None
+	conditioning = "concatenate" #"concatenate", None, "dual"
 	
 	slices = 1
 	channels = 1

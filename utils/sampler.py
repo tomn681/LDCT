@@ -25,20 +25,25 @@ class SamplingPipeline(DiffusionPipeline):
             A scheduler to be used in combination with `unet` to denoise the encoded image. Can be one of
             [`DDPMScheduler`], or [`DDIMScheduler`].
         inverse_scheduler (Optional[`SchedulerMixin`]):
-            A scheduler to be used in combination with `unet` for noise addition. Can be None for standard
-            random noise addition, 'skip' for no noise addition or [`DDIMInverseScheduler`].
+            A scheduler to be used in combination with `unet` for noise addition. Can be 'default' for standard
+            random noise addition, None for no noise addition or [`DDIMInverseScheduler`].
+        conditioning (Optional[`str`])
+            Model conditioning type. Use 'concatenate' if model is conditional by channel-wise concatenation, 
+            'dual' for dual input conditionind or None if model is not conditional.
         MIN_B (Optional[`int`])
             Minimum value within the image's intensity range for normalization
         MAX_B (Optional[`int`])
             Maximum value within the image's intensity range for normalization.
     """
 
-    def __init__(self, unet, scheduler, inverse_scheduler=None, MIN_B=-1024, MAX_B=3072):
+    def __init__(self, unet, scheduler, inverse_scheduler='default', conditioning=None, MIN_B=-1024, MAX_B=3072):
         super().__init__()
         self.register_modules(unet=unet, scheduler=scheduler)
         
         self.MIN_B=MIN_B
         self.MAX_B=MAX_B
+        
+        self.conditioning = conditioning
         
         self.scheduler = scheduler
         self.inverse_scheduler = inverse_scheduler
@@ -285,7 +290,8 @@ class SamplingPipeline(DiffusionPipeline):
                 self.unet.config.sample_size,
             )
         else:
-            image_shape = (batch_size, self.unet.config.in_channels, *self.unet.config.sample_size)
+            in_channels = self.unet.config.in_channels//2 if self.conditioning is not None else self.unet.config.in_channels
+            image_shape = (batch_size, in_channels, *self.unet.config.sample_size)
 
         # Sample random noise if no image input
         if images is None:
@@ -306,16 +312,16 @@ class SamplingPipeline(DiffusionPipeline):
             # Add noise to the clean images according to the noise magnitude at each timestep
             # (this is the forward diffusion process)
             if isinstance(self.inverse_scheduler, SchedulerMixin):
-                images = self.invert(images,
+                noisy_images = self.invert(images,
                     num_inference_steps=num_inference_steps,
                     output_type="torch").images
                     
-            elif self.inverse_scheduler == 'skip':
-                ...
-            
-            else:
+            elif self.inverse_scheduler is "default":
                 noise = torch.randn(images.shape).to(self.device)
-                images = self.scheduler.add_noise(images, noise, timesteps)
+                noisy_images = self.scheduler.add_noise(images, noise, timesteps)
+                    
+            else:
+                noisy_images = images
 
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)
@@ -344,12 +350,15 @@ class SamplingPipeline(DiffusionPipeline):
         ######################33
 
         for t in self.progress_bar(self.scheduler.timesteps):
-            #images = self.scheduler.scale_model_input(images, t)
+            #noisy_images = self.scheduler.scale_model_input(noisy_images, t)
+            if self.conditioning == "concatenate":
+                noisy_images = torch.cat((noisy_images, images), dim=1)
+            
             # 1. predict noise model_output
-            model_output = self.unet(images, t).sample
+            model_output = self.unet(noisy_images, t).sample
 
             # 2. compute previous image: x_t -> x_t-1
-            images = self.scheduler.step(model_output, t, images).prev_sample
+            noisy_images = self.scheduler.step(model_output, t, noisy_images).prev_sample
             
             ######################################################################3333333333333
             if t%step == 0:
@@ -358,7 +367,7 @@ class SamplingPipeline(DiffusionPipeline):
                 col = ((t//step) % (n_cols-lg_size))
                 
                 ax = fig.add_subplot(grid[row, col])
-                ax.imshow(images[0].cpu().permute(1,2,0).numpy(), cmap='gray')
+                ax.imshow(noisy_images[0].cpu().permute(1,2,0).numpy(), cmap='gray')
                 ax.axis('off')
                 ax.set_title(f"Step {t+1}")
              
@@ -366,23 +375,23 @@ class SamplingPipeline(DiffusionPipeline):
         col = ((t//step) % n_cols)
                    
         ax_main = fig.add_subplot(grid[-lg_size:, -lg_size:]) 
-        ax_main.imshow(images[0].cpu().permute(1,2,0).numpy(), cmap='gray')
+        ax_main.imshow(noisy_images[0].cpu().permute(1,2,0).numpy(), cmap='gray')
         ax_main.axis('off')
         ax_main.set_title(f"Final Step {t+1}")
             
         plt.show()
             ##############################################################################33333
 
-        images = (images / 2 + 0.5).clamp(0, 1) #################################################################33
-        images = images.cpu().permute(0, 2, 3, 1).numpy()
+        noisy_images = (noisy_images / 2 + 0.5).clamp(0, 1) #################################################################33
+        noisy_images = noisy_images.cpu().permute(0, 2, 3, 1).numpy()
         if output_type == "pil":
-            images = self.numpy_to_pil(images)
+            noisy_images = self.numpy_to_pil(noisy_images)
         
-        images = self.postprocess(images)
+        noisy_images = self.postprocess(noisy_images)
 
         if not return_dict:
-            return (images,)
+            return (noisy_images,)
 
-        return ImagePipelineOutput(images=images)
+        return ImagePipelineOutput(images=noisy_images)
         
     

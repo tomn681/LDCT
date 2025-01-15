@@ -13,6 +13,8 @@ from huggingface_hub import HfFolder, Repository, whoami
 from diffusers.optimization import get_cosine_schedule_with_warmup
 from utils.dataset import DefaultDataset, CombinationDataset
 
+from utils.sampler import SamplingPipeline
+
 
 #!pip install diffusers[training]
 
@@ -20,6 +22,7 @@ model = Unet2D
 
 if config.conditioning is not None:
     dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices, diff=False)
+    test_dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices, diff=False, train=False)
 
 else:
     dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices)
@@ -116,7 +119,8 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             
         # After each epoch you optionally sample some demo images with evaluate() and save the model
         if accelerator.is_main_process:
-            pipeline = config.pipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
+            pipeline = SamplingPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler,
+                                        conditioning=config.conditioning)
             if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
                 evaluate(config, epoch, pipeline)
             if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
