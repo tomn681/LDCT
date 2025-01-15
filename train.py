@@ -18,7 +18,11 @@ from utils.dataset import DefaultDataset, CombinationDataset
 
 model = Unet2D
 
-dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices)
+if config.conditioning is not None:
+    dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices, diff=False)
+
+else:
+    dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices)
 
 loader_args = dict(batch_size=config.train_batch_size, num_workers=4, pin_memory=True)
 train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.train_batch_size, shuffle=True)
@@ -90,8 +94,9 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             # (this is the forward diffusion process)
             noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
             
+            # If concatenation, concatenate noisy image with LDCT
             if config.conditioning == "concatenate":
-                noisy_images = torch.cat((noisy_images, clean_images), dim=1)
+                noisy_images = torch.cat((noisy_images, batch["image"]), dim=1) #batch["image"] -> clean_images
             
             with accelerator.accumulate(model):
                 # Predict the noise residual
