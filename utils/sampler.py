@@ -316,7 +316,7 @@ class SamplingPipeline(DiffusionPipeline):
                     num_inference_steps=num_inference_steps,
                     output_type="torch").images
                     
-            elif self.inverse_scheduler is "default":
+            elif self.inverse_scheduler == "default":
                 noise = torch.randn(images.shape).to(self.device)
                 noisy_images = self.scheduler.add_noise(images, noise, timesteps)
                     
