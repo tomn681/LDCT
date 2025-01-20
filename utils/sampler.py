@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from skimage.transform import resize
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 from diffusers import DiffusionPipeline, ImagePipelineOutput, SchedulerMixin
 from diffusers.utils.torch_utils import randn_tensor
@@ -334,8 +335,7 @@ class SamplingPipeline(DiffusionPipeline):
         self.unet.eval()
         
         ######################33
-        
-        import matplotlib.pyplot as plt
+      
         samples = 15
         cols = 5
         lg_size = 2
@@ -376,6 +376,7 @@ class SamplingPipeline(DiffusionPipeline):
 
             # 2. compute previous image: x_t -> x_t-1
             noisy_images = self.scheduler.step(model_output, t, noisy_images).prev_sample
+            print(noisy_images.shape)
             
             ######################################################################3333333333333
             if int(t) in sampled_values:
