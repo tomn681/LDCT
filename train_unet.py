@@ -1,6 +1,7 @@
 import argparse
 import logging
 import sys
+import csv
 from pathlib import Path
 
 import torch
@@ -304,20 +305,28 @@ if __name__ == '__main__':
 							    'epoch': epoch,
 							    **histograms
 							})
+							
 				val_score = evaluate(net, val_loader, device, criterion)	
 				scheduler.step(val_score)		
-				validation_score.append(val_score.cpu())
+				validation_score.append(val_score.cpu().item())
 				trn_score = evaluate(net, train_loader, device, criterion)
-				train_score.append(trn_score.cpu())
+				train_score.append(trn_score.cpu().item())
 				learnig_rate_val.append(optimizer.param_groups[0]['lr'])
 
 			if args.save_checkpoint:
 				Path(args.save_checkpoint).mkdir(parents=True, exist_ok=True)
 				torch.save(net.state_dict(), str(args.save_checkpoint + f'checkpoint_epoch{epoch}-{datetime.datetime.now().isoformat()}.pth'))
 				logging.info(f'Checkpoint {epoch} saved!')
+				
+				with open(args.save_checkpoint + "results.csv", mode='a', newline='') as file:
+					writer = csv.writer(file, delimiter='\t')
+					writer.writerow([str(epoch), str(optimizer.param_groups[0]['lr']), str(val_score.cpu().item()), str(trn_score.cpu().item()), str(epoch_loss)])
 			
 	except (KeyboardInterrupt, OSError):
 		pass
+	
+	import matplotlib
+	matplotlib.use('Agg')
 	
 	fig, ax = plt.subplots()
 
