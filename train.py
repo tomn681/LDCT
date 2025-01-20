@@ -132,9 +132,9 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
 def evaluate(config, epoch, pipeline):
     # Sample some images from random noise (this is the backward diffusion process).
     # The default pipeline output type is `List[PIL.Image]`
+    
     images = pipeline(
         batch_size=config.eval_batch_size,
-        generator=torch.Generator(device='cpu').manual_seed(config.seed), # Use a separate torch generator to avoid rewinding the random state of the main training loop
     ).images
 
     # Make a grid out of the images
