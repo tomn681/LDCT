@@ -50,7 +50,7 @@ class SamplingPipeline(DiffusionPipeline):
         
     def preprocess(self, image):
     
-        image = image['image'].numpy()
+        image = image['image'].cpu().numpy()
     
         if image.ndim == 2:
             image = image.unsqueeze(0).unsqueeze(0)
@@ -329,7 +329,7 @@ class SamplingPipeline(DiffusionPipeline):
         '''
         OVERRIDE
         '''
-        self.scheduler.timesteps = torch.arange(timesteps-1, 0, -1)
+        #self.scheduler.timesteps = torch.arange(timesteps-1, 0, -1)
         
         self.unet.eval()
         
