@@ -122,19 +122,21 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             pipeline = SamplingPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler,
                                         conditioning=config.conditioning)
             if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
-                evaluate(config, epoch, pipeline)
+                imgz = batch["image"] if config.conditioning is not None else None
+                evaluate(config, epoch, pipeline, imgz)
             if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
                 if config.push_to_hub:
                     repo.push_to_hub(commit_message=f"Epoch {epoch}", blocking=True)
                 else:
                     pipeline.save_pretrained(config.output_dir)
 
-def evaluate(config, epoch, pipeline):
+def evaluate(config, epoch, pipeline, images):
     # Sample some images from random noise (this is the backward diffusion process).
     # The default pipeline output type is `List[PIL.Image]`
     
     images = pipeline(
         batch_size=config.eval_batch_size,
+        images = images,
     ).images
 
     # Make a grid out of the images
