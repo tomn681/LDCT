@@ -375,7 +375,7 @@ class SamplingPipeline(DiffusionPipeline):
             model_output = self.unet(noisy_images, t).sample
 
             # 2. compute previous image: x_t -> x_t-1
-            noisy_images = self.scheduler.step(model_output, t, noisy_images).prev_sample
+            noisy_images = self.scheduler.step(model_output, t, noisy_images[0]).prev_sample
             print(noisy_images.shape)
             
             ######################################################################3333333333333
