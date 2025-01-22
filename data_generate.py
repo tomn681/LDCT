@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 
-split = 0.1
+split = 0.0
 random_state = 69
 
 # Función para encontrar rutas a las subcarpetas que contienen imágenes y proyecciones

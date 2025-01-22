@@ -13,16 +13,22 @@ from huggingface_hub import HfFolder, Repository, whoami
 from diffusers.optimization import get_cosine_schedule_with_warmup
 from utils.dataset import DefaultDataset, CombinationDataset
 
+from utils.sampler import SamplingPipeline
+
 
 #!pip install diffusers[training]
 
 model = Unet2D
 
-dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices, mean=config.image_mean, std=config.image_std)
-print(len(dataset))
+if config.conditioning is not None:
+    dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices, diff=False)
+    test_dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices, diff=False, train=False)
+
+else:
+    dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices)
 
 loader_args = dict(batch_size=config.train_batch_size, num_workers=4, pin_memory=True)
-train_dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, **loader_args)
+train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.train_batch_size, shuffle=True)
 
 noise_scheduler = config.scheduler(num_train_timesteps = config.num_train_timesteps)
 
@@ -91,6 +97,10 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             # (this is the forward diffusion process)
             noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
             
+            # If concatenation, concatenate noisy image with LDCT
+            if config.conditioning == "concatenate":
+                noisy_images = torch.cat((noisy_images, batch["image"]), dim=1) #batch["image"] -> clean_images
+            
             with accelerator.accumulate(model):
                 # Predict the noise residual
                 noise_pred = model(noisy_images, timesteps, return_dict=False)[0]
@@ -109,22 +119,25 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             
         # After each epoch you optionally sample some demo images with evaluate() and save the model
         if accelerator.is_main_process:
-            pipeline = config.pipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
+            pipeline = SamplingPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler,
+                                        conditioning=config.conditioning)
             if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
-                evaluate(config, epoch, pipeline)
+                imgz = batch if config.conditioning is not None else None
+                evaluate(config, epoch, pipeline, imgz)
             if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
                 if config.push_to_hub:
                     repo.push_to_hub(commit_message=f"Epoch {epoch}", blocking=True)
                 else:
                     pipeline.save_pretrained(config.output_dir)
 
-def evaluate(config, epoch, pipeline):
+def evaluate(config, epoch, pipeline, images):
     # Sample some images from random noise (this is the backward diffusion process).
     # The default pipeline output type is `List[PIL.Image]`
+    
     images = pipeline(
         batch_size=config.eval_batch_size,
-        generator=torch.Generator(device='cpu').manual_seed(config.seed), # Use a separate torch generator to avoid rewinding the random state of the main training loop
-    ).images
+        images = images,
+    ).images[:config.eval_batch_size]
 
     # Make a grid out of the images
     image_grid = make_image_grid(images, rows=config.eval_batch_size//4, cols=4)
@@ -146,8 +159,6 @@ preprocess = transforms.Compose([
 	transforms.ToTensor(),
 	transforms.Normalize([0.5], [0.5]),
 	])
-	
-train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.train_batch_size, shuffle=True)
 
 
 if __name__ == '__main__':

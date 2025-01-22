@@ -12,6 +12,7 @@ train/
 DefaultDataset/
 CombinationDataset/
 wandb/
+samples/
 
 # Distribution / packaging
 .Python
