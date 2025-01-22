@@ -116,7 +116,6 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             progress_bar.set_postfix(**logs)
             accelerator.log(logs, step=global_step)
             global_step += 1
-            break
             
         # After each epoch you optionally sample some demo images with evaluate() and save the model
         if accelerator.is_main_process:
@@ -138,7 +137,7 @@ def evaluate(config, epoch, pipeline, images):
     images = pipeline(
         batch_size=config.eval_batch_size,
         images = images,
-    ).images
+    ).images[:config.eval_batch_size]
 
     # Make a grid out of the images
     image_grid = make_image_grid(images, rows=config.eval_batch_size//4, cols=4)

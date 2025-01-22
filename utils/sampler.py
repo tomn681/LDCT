@@ -369,14 +369,15 @@ class SamplingPipeline(DiffusionPipeline):
         for t in self.progress_bar(self.scheduler.timesteps):
             #noisy_images = self.scheduler.scale_model_input(noisy_images, t)
             if self.conditioning == "concatenate":
-                noisy_images = torch.cat((noisy_images, images), dim=1)
+                noisy_samples = torch.cat((noisy_images, images), dim=1)
+            else:
+                noisy_samples = noisy_images
             
             # 1. predict noise model_output
-            model_output = self.unet(noisy_images, t).sample
+            model_output = self.unet(noisy_samples, t).sample
 
             # 2. compute previous image: x_t -> x_t-1
-            noisy_images = self.scheduler.step(model_output, t, noisy_images[0]).prev_sample
-            print(noisy_images.shape)
+            noisy_images = self.scheduler.step(model_output, t, noisy_images).prev_sample
             
             ######################################################################3333333333333
             if int(t) in sampled_values:
