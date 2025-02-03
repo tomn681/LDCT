@@ -7,7 +7,10 @@ from config import config
 from tqdm.auto import tqdm
 from accelerate import Accelerator
 from accelerate import notebook_launcher
+
 from models.DiffUNet2D import model as Unet2D
+from models.DiffUNet2DCond import model as Unet2DCond
+
 from diffusers.utils import make_image_grid
 from huggingface_hub import HfFolder, Repository, whoami
 from diffusers.optimization import get_cosine_schedule_with_warmup
@@ -26,6 +29,9 @@ if config.conditioning is not None:
 
 else:
     dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices)
+    
+if config.conditioning == 'dual':
+    model = Unet2DCond
 
 loader_args = dict(batch_size=config.train_batch_size, num_workers=4, pin_memory=True)
 train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.train_batch_size, shuffle=True)
@@ -103,7 +109,10 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             
             with accelerator.accumulate(model):
                 # Predict the noise residual
-                noise_pred = model(noisy_images, timesteps, return_dict=False)[0]
+                if config.conditioning == 'dual':
+                    noise_pred = model(noisy_images, timesteps, encoder_hidden_states=batch["image"], return_dict=False)[0]
+                else:
+                    noise_pred = model(noisy_images, timesteps, return_dict=False)[0]
                 loss = F.mse_loss(noise_pred, noise)
                 accelerator.backward(loss)
                 accelerator.clip_grad_norm_(model.parameters(), 1.0)

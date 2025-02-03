@@ -330,7 +330,7 @@ class SamplingPipeline(DiffusionPipeline):
         '''
         OVERRIDE
         '''
-        #self.scheduler.timesteps = torch.arange(timesteps-1, 0, -1)
+        self.scheduler.timesteps = torch.arange(num_inference_steps, 0, -1)
         
         self.unet.eval()
         
@@ -360,7 +360,7 @@ class SamplingPipeline(DiffusionPipeline):
         if num_inference_steps < samples:
             full_range = np.arange(0, num_inference_steps)
             displace = samples - num_inference_steps
-        
+
         fig = plt.figure(figsize=(n_cols * 4, n_rows * 4))
         grid = plt.GridSpec(n_rows, n_cols, wspace=0.1, hspace=0.1)
 
@@ -384,7 +384,7 @@ class SamplingPipeline(DiffusionPipeline):
                 index = np.where(sampled_values == int(t))[0]-1
                 row = (index-displace) // cols
                 col = (index-displace) % cols + lg_size
-                
+
                 ax = fig.add_subplot(grid[row, col])
                 ax.imshow(noisy_images[0].cpu().permute(1,2,0).numpy(), cmap='gray')
                 ax.axis('off')

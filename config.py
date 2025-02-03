@@ -16,7 +16,7 @@ class TrainingConfig:
 	
 	num_epochs = 500
 	num_train_timesteps = 1000
-	num_inference_steps = 1000
+	num_inference_steps = 10
 	
 	model_name = "DDPM_Concat"
 	scheduler = DDPMScheduler#EDMEulerScheduler
