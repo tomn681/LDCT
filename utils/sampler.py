@@ -8,9 +8,9 @@ from skimage.transform import resize
 import numpy as np
 import matplotlib.pyplot as plt
 
+from diffusers import DDPMScheduler
 from diffusers import DiffusionPipeline, ImagePipelineOutput, SchedulerMixin
 from diffusers.utils.torch_utils import randn_tensor
-
 
 class SamplingPipeline(DiffusionPipeline):
     r"""
@@ -27,7 +27,7 @@ class SamplingPipeline(DiffusionPipeline):
             [`DDPMScheduler`], or [`DDIMScheduler`].
         inverse_scheduler (Optional[`SchedulerMixin`]):
             A scheduler to be used in combination with `unet` for noise addition. Can be 'default' for standard
-            random noise addition, None for no noise addition or [`DDIMInverseScheduler`].
+            random noise addition, 'DDPM' for compatibility, None for no noise addition or [`DDIMInverseScheduler`].
         conditioning (Optional[`str`])
             Model conditioning type. Use 'concatenate' if model is conditional by channel-wise concatenation, 
             'dual' for dual input conditionind or None if model is not conditional.
@@ -49,9 +49,12 @@ class SamplingPipeline(DiffusionPipeline):
         self.scheduler = scheduler
         self.inverse_scheduler = inverse_scheduler
         
-    def preprocess(self, image):
+        if inverse_scheduler == 'DDPM':
+            self.ddpm_scheduler = DDPMScheduler(num_train_timesteps = config.num_train_timesteps)
+        
+    def preprocess(self, image, cls='image'):
     
-        image = image['image'].cpu().numpy()
+        image = image[cls].cpu().numpy()
     
         if image.ndim == 2:
             image = image.unsqueeze(0).unsqueeze(0)
@@ -179,12 +182,17 @@ class SamplingPipeline(DiffusionPipeline):
 
         # 7. Denoising loop where we obtain the cross-attention maps.
         num_warmup_steps = len(timesteps) - num_inference_steps * self.inverse_scheduler.order
-        with self.progress_bar(total=num_inference_steps - 2) as progress_bar:
+        with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps[1:-1]):
                 latent_model_input = self.inverse_scheduler.scale_model_input(image, t)
-
+                
                 # predict the noise residual
-                noise_pred = self.unet(latent_model_input, t).sample
+                if self.conditioning == "concatenate":
+                    model_input = torch.cat((latent_model_input, image), dim=1)
+                    noise_pred = self.unet(model_input, t).sample
+
+                else:
+                    noise_pred = self.unet(latent_model_input, t).sample
 
                 # regularization of the noise prediction
                 with torch.enable_grad():
@@ -282,6 +290,8 @@ class SamplingPipeline(DiffusionPipeline):
                 If `return_dict` is `True`, [`~pipelines.ImagePipelineOutput`] is returned, otherwise a `tuple` is
                 returned where the first element is a list with the generated images
         """
+        num_inference_steps = num_inference_steps - 1
+        
         # Sample gaussian noise to begin loop
         if isinstance(self.unet.config.sample_size, int):
             image_shape = (
@@ -317,9 +327,13 @@ class SamplingPipeline(DiffusionPipeline):
                     num_inference_steps=num_inference_steps,
                     output_type="torch").images
                     
+            elif self.inverse_scheduler == "DDPM":
+                noise = torch.randn(images.shape).to(self.device)
+                noisy_images = self.ddpm_scheduler.add_noise(images, noise, timesteps)
+                
             elif self.inverse_scheduler == "default":
                 noise = torch.randn(images.shape).to(self.device)
-                noisy_images = self.scheduler.add_noise(images, noise, timesteps-1)
+                noisy_images = self.scheduler.add_noise(images, noise, timesteps)
                     
             else:
                 noisy_images = images
@@ -335,7 +349,7 @@ class SamplingPipeline(DiffusionPipeline):
         self.unet.eval()
         
         ######################33
-      
+        '''
         samples = 15
         cols = 5
         lg_size = 2
@@ -363,7 +377,7 @@ class SamplingPipeline(DiffusionPipeline):
 
         fig = plt.figure(figsize=(n_cols * 4, n_rows * 4))
         grid = plt.GridSpec(n_rows, n_cols, wspace=0.1, hspace=0.1)
-
+        '''
         ######################33
 
         for t in self.progress_bar(self.scheduler.timesteps):
@@ -380,6 +394,7 @@ class SamplingPipeline(DiffusionPipeline):
             noisy_images = self.scheduler.step(model_output, t, noisy_images).prev_sample
             
             ######################################################################3333333333333
+        '''
             if int(t) in sampled_values:
                 index = np.where(sampled_values == int(t))[0]-1
                 row = (index-displace) // cols
@@ -399,9 +414,11 @@ class SamplingPipeline(DiffusionPipeline):
         ax_main.set_title(f"Final Step")
             
         plt.show()
+        '''
             ##############################################################################33333
 
-        noisy_images = (noisy_images / 2 + 0.5).clamp(0, 1) #################################################################33
+        #noisy_images = (noisy_images / 2 + 0.5).clamp(0, 1) #################################################################33
+        noisy_images = noisy_images.clamp(0, 1)
         noisy_images = noisy_images.cpu().permute(0, 2, 3, 1).numpy()
         if output_type == "pil":
             noisy_images = self.numpy_to_pil(noisy_images)

@@ -16,13 +16,13 @@ class TrainingConfig:
 	
 	num_epochs = 500
 	num_train_timesteps = 1000
-	num_inference_steps = 10
+	num_inference_steps = 1000
 	
-	model_name = "DDPM_Concat"
+	model_name = "DDPM_Attn"
 	scheduler = DDPMScheduler#EDMEulerScheduler
 	pipeline = DDPMPipeline #DDPM as Default for most schedulers
 	
-	conditioning = "concatenate" #"concatenate", None, "dual"
+	conditioning = "dual" #"concatenate", None, "dual"
 	
 	slices = 1
 	channels = 1

@@ -110,7 +110,8 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
             with accelerator.accumulate(model):
                 # Predict the noise residual
                 if config.conditioning == 'dual':
-                    noise_pred = model(noisy_images, timesteps, encoder_hidden_states=batch["image"], return_dict=False)[0]
+                    added_cond_kwargs = {"image_embeds": image_embeds} #"text_embeds": prompt_embeds, 
+                    noise_pred = model(noisy_images, timesteps, encoder_hidden_states=batch["image"], return_dict=False, added_cond_kwargs=added_cond_kwargs)[0]
                 else:
                     noise_pred = model(noisy_images, timesteps, return_dict=False)[0]
                 loss = F.mse_loss(noise_pred, noise)

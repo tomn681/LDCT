@@ -7,7 +7,6 @@ model = UNet2DConditionModel(
     out_channels=config.channels,  # the number of output channels
     layers_per_block=2,  # how many ResNet layers to use per UNet block
     only_cross_attention=False,
-    layers_per_block=2,
     block_out_channels=(320, 640, 1280, 1280),
     down_block_types=(
         "CrossAttnDownBlock2D",

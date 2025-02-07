@@ -25,11 +25,11 @@ matplotlib.use("TkAgg")
 from models.DiffUNet2D import model as Unet2D
 from diffusers import DDPMScheduler, DDIMScheduler
 
-def evaluate(pipeline, path, model_path):
+def evaluate(pipeline, path, save=False, save_image_batches=10, batches=1, show=False, num_inference_steps=None):
     psnr = PeakSignalNoiseRatio()
     ssim = StructuralSimilarity()
     mse = MeanSquaredError()
-    throughput_metric = Throughput()
+    throughput_metric = Throughput() #Es el tiempo total sobre el numero de imagenes procesadas (incluye batch size)
 
     dataset = DefaultDataset('./DefaultDataset', img_size=config.image_size, s_cnt=config.slices, train=False)
 
@@ -37,16 +37,22 @@ def evaluate(pipeline, path, model_path):
     loader_args = dict(batch_size=config.eval_batch_size, num_workers=4, pin_memory=True)
     test_dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, **loader_args)
     
+    batches = len(test_dataloader) + batches + 1 if batches < 0 else batches
+    
     for idx, batch in enumerate(test_dataloader):
     
+        if idx >= batches:
+            break
+    
         start_time = time.time()
-        output = pipeline(num_inference_steps=config.num_inference_steps, num_noise_steps=None, batch_size=config.eval_batch_size, 
+        num_inference_steps = num_inference_steps if num_inference_steps else config.num_inference_steps
+        output = pipeline(num_inference_steps=num_inference_steps, num_noise_steps=None, batch_size=config.eval_batch_size, 
                             output_type='np.array', images=batch).images#.squeeze()
 
         output = torch.from_numpy(output).permute(0,3,1,2)
         end_time = time.time()
 
-        input_img = pipeline.preprocess(batch)#.squeeze()
+        input_img = pipeline.preprocess(batch, cls='target')#.squeeze()
         
         elapsed_time = end_time - start_time
         throughput_metric.update(num_processed=batch['image'].shape[0], elapsed_time_sec=elapsed_time)
@@ -56,9 +62,9 @@ def evaluate(pipeline, path, model_path):
             ssim.update(img, out)
             mse.update(img.flatten(), out.flatten())
         
-        #os.mkdir(os.path.join(model_path, "test")) #Move to plot_input_...
-        plot_input_output_batches(batch["image"].numpy(), output.numpy())#, save=f"{model_path}/test/Batch-{idx}.png")
-        break
+        if idx % save_image_batches == 0 and save or show:
+            save = save+f"_batch_{idx}.png" if save else save
+            plot_input_output_batches(batch["image"].numpy(), output.numpy(), save=save, show=show)
         
     PSNR = psnr.compute()
     SSIM = ssim.compute()
@@ -67,7 +73,7 @@ def evaluate(pipeline, path, model_path):
 
     return PSNR, RMSE, SSIM, THROUGHPUT
 
-def plot_input_output_batches(input_batch, output_batch, save=False):
+def plot_input_output_batches(input_batch, output_batch, save=False, show=False):
     """
     Plots input and output images in a grid format.
 
@@ -120,10 +126,12 @@ def plot_input_output_batches(input_batch, output_batch, save=False):
     plt.tight_layout()
     
     if save:
-        plt.imsave(save)
-        return
-    
-    plt.show()
+        plt.savefig(save)
+        
+    if show:
+        plt.show()
+        
+    return
 
 if __name__ == '__main__':
    
@@ -135,14 +143,14 @@ if __name__ == '__main__':
     
     pipeline = SamplingPipeline.from_pretrained(model_path, use_safetensors=True, conditioning=config.conditioning).to(device)
     
-    pipeline.inverse_scheduler = "default"
-    #pipeline.inverse_scheduler = DDIMInverseScheduler.from_pretrained(model_path+"/scheduler/")
+    #pipeline.inverse_scheduler = "default"
+    pipeline.inverse_scheduler = DDIMInverseScheduler.from_pretrained(model_path+"/scheduler/")
     
     
     pipeline.scheduler = config.scheduler.from_pretrained(model_path+"/scheduler/")
     
     path = "./DefaultDataset/test.txt"
-    print(evaluate(pipeline, path, model_path))
+    print(evaluate(pipeline, path, show=True))
     
     #input_image_path = "../manifest-1648648375084/LDCT-and-Projection-data/C002/12-23-2021-NA-NA-62464/1.000000-Low Dose Images-39882/1-001.dcm"
     
