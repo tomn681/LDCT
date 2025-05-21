@@ -12,6 +12,8 @@ from diffusers import DDPMScheduler
 from diffusers import DiffusionPipeline, ImagePipelineOutput, SchedulerMixin
 from diffusers.utils.torch_utils import randn_tensor
 
+import config.TrainingConfig as config
+
 class SamplingPipeline(DiffusionPipeline):
     r"""
     Pipeline for image generation.
@@ -252,6 +254,7 @@ class SamplingPipeline(DiffusionPipeline):
         num_noise_steps=None,
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
+        mode = 'last',
     ) -> Union[ImagePipelineOutput, Tuple]:
         r"""
         The call function to the pipeline for generation.
@@ -337,14 +340,16 @@ class SamplingPipeline(DiffusionPipeline):
                     
             else:
                 noisy_images = images
-
-        # set step values
-        self.scheduler.set_timesteps(num_inference_steps)
         
         '''
-        OVERRIDE
+        Set timesteps
         '''
-        self.scheduler.timesteps = torch.arange(num_inference_steps, 0, -1)
+        self.scheduler.set_timesteps(num_inference_steps)
+        
+        if mode == 'last':
+            self.scheduler.set_timesteps(num_inference_steps=config.num_train_timesteps)
+            self.scheduler.timesteps = torch.arange(num_inference_steps, 0, -1)
+            self.scheduler.num_inference_steps = len(self.scheduler.timesteps)
         
         self.unet.eval()
         

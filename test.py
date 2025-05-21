@@ -17,11 +17,14 @@ models = [("../ddpm_concat-no-256-1-42-2025-20-01-22:42", "concatenate"),
 
 timesteps = [10, 25, 50, 150, 500, 1000]
 
-#inverse_schedulers = ["DDIM_Inverse", "DDPM"]   
-inverse_schedulers = ["DDPM"]   
+inverse_schedulers = ["DDIM_Inverse", "DDPM"]   
+#inverse_schedulers = ["DDPM"]   
 
-#schedulers = [DDPMScheduler, DDIMScheduler, DPMSolverMultistepScheduler, DPMSolverSDEScheduler, UniPCMultistepScheduler]
-schedulers = [DPMSolverMultistepScheduler, DPMSolverSDEScheduler, UniPCMultistepScheduler]
+schedulers = [DDIMScheduler, DPMSolverMultistepScheduler, DPMSolverSDEScheduler, UniPCMultistepScheduler]
+#schedulers = [DPMSolverMultistepScheduler, DPMSolverSDEScheduler, UniPCMultistepScheduler]
+
+#modes = ['last']
+modes = ['last', 'equal']
 
 path = "./DefaultDataset/test.txt"
 
@@ -41,21 +44,23 @@ if __name__ == '__main__':
             for scheduler in schedulers:
                 pipeline.scheduler = scheduler.from_pretrained(model[0]+"/scheduler/")
                 
-                for timestep in timesteps:
-                    save = os.path.join(save_path, f"{model[0].split('/')[-1]}/{inv_scheduler}/{scheduler.__name__}/{timestep}/")
-                    pathlib.Path(save).mkdir(parents=True, exist_ok=True)
-                    
-                    print(f"Testing:\n\t{model[0].split('/')[-1]}\n\t{inv_scheduler}\n\t{scheduler.__name__}\n\t{timestep}")
-                    
-                    try:
-                        PSNR, RMSE, SSIM, THROUGHPUT = evaluate(pipeline, path, save=save, save_image_batches=save_image_batches, batches=1, num_inference_steps=timestep)
+                for mode in modes:
+                
+                    for timestep in timesteps:
+                        save = os.path.join(save_path, f"{model[0].split('/')[-1]}/{inv_scheduler}/{scheduler.__name__}/{timestep}/")
+                        pathlib.Path(save).mkdir(parents=True, exist_ok=True)
                         
-                        with open(save + 'results.txt','w') as file:
-                            file.write("PSNR, RMSE, SSIM, THROUGHPUT\n")
-                            file.write(f"{PSNR}, {RMSE}, {SSIM}, {THROUGHPUT}")
+                        print(f"Testing:\n\t{model[0].split('/')[-1]}\n\t{inv_scheduler}\n\t{scheduler.__name__}\n\t{timestep}")
+                        
+                        try:
+                            PSNR, RMSE, SSIM, THROUGHPUT = evaluate(pipeline, path, save=save, save_image_batches=save_image_batches, batches=1, num_inference_steps=timestep, mode=mode)
                             
-                    except Exception as err:
-                        print("Test Failed")
-                        with open(save + 'FAILED TEST','w') as file:
-                            file.write(str(e))
+                            with open(save + 'results.txt','w') as file:
+                                file.write("PSNR, RMSE, SSIM, THROUGHPUT\n")
+                                file.write(f"{PSNR}, {RMSE}, {SSIM}, {THROUGHPUT}")
+                                
+                        except Exception as err:
+                            print("Test Failed")
+                            with open(save + 'FAILED TEST','w') as file:
+                                file.write(str(e))
 
