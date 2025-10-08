@@ -12,7 +12,7 @@ from diffusers import DDPMScheduler
 from diffusers import DiffusionPipeline, ImagePipelineOutput, SchedulerMixin
 from diffusers.utils.torch_utils import randn_tensor
 
-import config.TrainingConfig as config
+from config import TrainingConfig
 
 class SamplingPipeline(DiffusionPipeline):
     r"""
@@ -245,6 +245,41 @@ class SamplingPipeline(DiffusionPipeline):
 
         return ImagePipelineOutput(inverted_latents)
 
+    def _force_timesteps(self, mode, num_inference_steps):
+        """
+        Asigna los timesteps personalizados para modo 'last' incluso si el scheduler no los acepta explícitamente.
+        Si el scheduler no acepta el argumento `timesteps`, los setea manualmente.
+        """
+        if mode == 'last':
+            # 1. Generar todos los timesteps del entrenamiento
+            self.scheduler.set_timesteps(num_inference_steps=self.scheduler.config.num_train_timesteps, device=self.device)
+
+            if not hasattr(self.scheduler, "timesteps"):
+                raise ValueError(f"Scheduler {type(self.scheduler).__name__} has no `.timesteps` attribute.")
+
+            full_timesteps = self.scheduler.timesteps
+            custom_timesteps = full_timesteps[-num_inference_steps:]  # ✅ últimos pasos (inicio de denoising)
+
+            # Asegurar que sea un np.ndarray
+            if isinstance(custom_timesteps, torch.Tensor):
+                custom_timesteps = custom_timesteps.cpu().numpy()
+            custom_timesteps = np.array(custom_timesteps).astype(np.int64)
+
+            # 2. Intentar pasar como argumento si es compatible
+            try:
+                self.scheduler.set_timesteps(timesteps=custom_timesteps, device=self.device)
+            except TypeError:
+                # 3. Si falla, sobrescribir directamente
+                print(f"⚠️ Forcing `timesteps` manually into {type(self.scheduler).__name__}")
+                self.scheduler.set_timesteps(num_inference_steps=self.scheduler.config.num_train_timesteps, device=self.device)
+                self.scheduler.timesteps = custom_timesteps
+                self.scheduler.num_inference_steps = len(custom_timesteps)
+
+        else:
+            # modo 'equal' o default
+            self.scheduler.set_timesteps(num_inference_steps=num_inference_steps, device=self.device)
+
+
     @torch.no_grad()
     def __call__(
         self,
@@ -340,17 +375,9 @@ class SamplingPipeline(DiffusionPipeline):
                     
             else:
                 noisy_images = images
-        
-        '''
-        Set timesteps
-        '''
-        self.scheduler.set_timesteps(num_inference_steps)
-        
-        if mode == 'last':
-            self.scheduler.set_timesteps(num_inference_steps=config.num_train_timesteps)
-            self.scheduler.timesteps = torch.arange(num_inference_steps, 0, -1)
-            self.scheduler.num_inference_steps = len(self.scheduler.timesteps)
-        
+
+        self._force_timesteps(mode, num_inference_steps)
+
         self.unet.eval()
         
         ######################33

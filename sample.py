@@ -1,5 +1,6 @@
 from typing import List, Optional, Tuple, Union
 
+import os
 import time
 import torch
 from skimage.transform import resize
@@ -17,15 +18,18 @@ from utils.dataset import DefaultDataset, CombinationDataset
 
 from torcheval.metrics import PeakSignalNoiseRatio, MeanSquaredError, Throughput
 
+
+import pydicom
+from pydicom.dataset import Dataset, FileDataset
 #######################################################################
 import matplotlib.pyplot as plt
 import matplotlib
-matplotlib.use("TkAgg")
+#matplotlib.use("TkAgg")
 
 from models.DiffUNet2D import model as Unet2D
 from diffusers import DDPMScheduler, DDIMScheduler
 
-def evaluate(pipeline, path, save=False, save_image_batches=10, batches=1, show=False, num_inference_steps=None):
+def evaluate(pipeline, path, save=False, save_image_batches=10, batches=1, show=False, num_inference_steps=None, mode='last', file_type=None):
     psnr = PeakSignalNoiseRatio()
     ssim = StructuralSimilarity()
     mse = MeanSquaredError()
@@ -47,7 +51,7 @@ def evaluate(pipeline, path, save=False, save_image_batches=10, batches=1, show=
         start_time = time.time()
         num_inference_steps = num_inference_steps if num_inference_steps else config.num_inference_steps
         output = pipeline(num_inference_steps=num_inference_steps, num_noise_steps=None, batch_size=config.eval_batch_size, 
-                            output_type='np.array', images=batch).images#.squeeze()
+                            output_type='np.array', images=batch, mode=mode).images#.squeeze()
 
         output = torch.from_numpy(output).permute(0,3,1,2)
         end_time = time.time()
@@ -63,9 +67,32 @@ def evaluate(pipeline, path, save=False, save_image_batches=10, batches=1, show=
             mse.update(img.flatten(), out.flatten())
         
         if idx % save_image_batches == 0 and save or show:
-            save = save+f"_batch_{idx}.png" if save else save
-            plot_input_output_batches(batch["image"].numpy(), output.numpy(), save=save, show=show)
-        
+            if file_type == None:
+                save = save+f"_batch_{idx}.png" if save else save
+                plot_input_output_batches(batch["image"].numpy(), output.numpy(), save=save, show=show)
+            else:
+                for i, out_img in enumerate(output):
+                    img_id = batch['img_id'][i]
+                    if file_type == "dcm":
+                        dcm = FileDataset(None, {}, file_meta=pydicom.dataset.FileMetaDataset(), preamble=b"\0" * 128)
+                        dcm.Modality = 'OT'  # Other
+                        dcm.ContentDate = None
+                        dcm.ContentTime = None
+                        dcm.Rows, dcm.Columns = out_img.shape[1], out_img.shape[2]
+                        dcm.SamplesPerPixel = 1
+                        dcm.PhotometricInterpretation = "MONOCHROME2"
+                        dcm.BitsStored = 16
+                        dcm.BitsAllocated = 16
+                        dcm.HighBit = 15
+                        dcm.PixelRepresentation = 1
+                        dcm.PixelData = (out_img[0].numpy() * 65535).astype('uint16').tobytes()
+                        dcm.save_as(os.path.join(save, f"{img_id}.dcm"))
+                    else:
+                        plt.imshow(output_batch[0, 0], cmap="gray")
+                        plt.axis('off')
+                        plt.savefig(save + img_id + file_type, bbox_inches='tight', pad_inches=0)
+                        plt.close()
+ 
     PSNR = psnr.compute()
     SSIM = ssim.compute()
     RMSE = np.sqrt(mse.compute())
@@ -139,18 +166,20 @@ if __name__ == '__main__':
     
     #model_path = "../ddpm-no-256-1-42-2024-02-12-15:42" #"../ddim-no-256-1-42-2024-02-12-15:43"
     #model_path = "../ddpm-no-512-1-42-2024-12-12-21:35"
-    model_path = "../ddpm_concat-no-256-1-42-2025-20-01-22:42"
+    model_path = "./train/ddpm_concat-no-256-1-42-2025-20-01-22:42"
     
-    pipeline = SamplingPipeline.from_pretrained(model_path, use_safetensors=True, conditioning=config.conditioning).to(device)
+    pipeline = SamplingPipeline.from_pretrained(model_path, use_safetensors=True, conditioning="concatenate").to(device)
     
     #pipeline.inverse_scheduler = "default"
-    pipeline.inverse_scheduler = DDIMInverseScheduler.from_pretrained(model_path+"/scheduler/")
+    pipeline.inverse_scheduler = DDPMScheduler.from_pretrained(model_path+"/scheduler/")
     
     
     pipeline.scheduler = config.scheduler.from_pretrained(model_path+"/scheduler/")
     
+    save = "../temp"
+
     path = "./DefaultDataset/test.txt"
-    print(evaluate(pipeline, path, show=True))
+    print(evaluate(pipeline, path, save=save, show=False, save_image_batches=1, batches=-1, num_inference_steps=150, mode="last", file_type="dcm"))
     
     #input_image_path = "../manifest-1648648375084/LDCT-and-Projection-data/C002/12-23-2021-NA-NA-62464/1.000000-Low Dose Images-39882/1-001.dcm"
     

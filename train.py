@@ -9,7 +9,7 @@ from accelerate import Accelerator
 from accelerate import notebook_launcher
 
 from models.DiffUNet2D import model as Unet2D
-from models.DiffUNet2DCond import model as Unet2DCond
+#from models.DiffUNet2DCond import model as Unet2DCond
 
 from diffusers.utils import make_image_grid
 from huggingface_hub import HfFolder, Repository, whoami
