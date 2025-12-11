@@ -1,0 +1,16 @@
+diffusers[training]
+accelerate
+torch
+torchvision
+torcheval
+transformers
+huggingface-hub
+numpy
+pandas
+matplotlib
+scikit-image
+opencv-python
+pydicom
+pillow
+tqdm
+wandb
