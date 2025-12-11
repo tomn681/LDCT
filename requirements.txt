@@ -1,8 +1,8 @@
-diffusers[training]
-accelerate
-torch
-torchvision
-torcheval
+diffusers[training]>=0.25.0
+accelerate>=0.23.0
+torch>=2.0.0
+torchvision>=0.15.0
+torcheval>=0.0.7
 transformers
 huggingface-hub
 numpy
