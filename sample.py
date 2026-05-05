@@ -49,9 +49,9 @@ def evaluate(pipeline, path, save=False, save_image_batches=10, batches=1, show=
             break
     
         start_time = time.time()
-        num_inference_steps = num_inference_steps if num_inference_steps else config.num_inference_steps
-        output = pipeline(num_inference_steps=num_inference_steps, num_noise_steps=None, batch_size=config.eval_batch_size, 
-                            output_type='np.array', images=batch, mode=mode).images#.squeeze()
+        output = pipeline(num_inference_steps=config.num_inference_steps, num_noise_steps=None, batch_size=config.eval_batch_size, 
+                            output_type='np.array', images=batch, visualize=False).images#.squeeze()
+        end_time = time.time()
 
         output = torch.from_numpy(output).permute(0,3,1,2)
         end_time = time.time()

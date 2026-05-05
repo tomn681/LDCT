@@ -18,8 +18,9 @@ class TrainingConfig:
 	num_train_timesteps = 1000
 	num_inference_steps = 1000
 	
-	model_name = "Flow"
-	scheduler = FlowMatchEulerDiscreteScheduler#DDPMScheduler#EDMEulerScheduler
+	model_name = "FlowMatch_Concat"
+	# Default to flow matching scheduler; swap if you want classic DDPM.
+	scheduler = FlowMatchEulerDiscreteScheduler
 	pipeline = DDPMPipeline #DDPM as Default for most schedulers
 	
 	conditioning = "concatenate" #"dual" #"concatenate", None, "dual"
