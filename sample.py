@@ -2,7 +2,7 @@ from typing import List, Optional, Tuple, Union
 
 import time
 import torch
-from skimage.transform import resize
+import torch.nn.functional as F
 
 from utils.sampler import SamplingPipeline
 import numpy as np
@@ -38,15 +38,29 @@ def evaluate(pipeline, path, model_path):
     test_dataloader = torch.utils.data.DataLoader(dataset, shuffle=True, **loader_args)
     
     for idx, batch in enumerate(test_dataloader):
-    
-        start_time = time.time()
-        output = pipeline(num_inference_steps=config.num_inference_steps, num_noise_steps=None, batch_size=config.eval_batch_size, 
-                            output_type='np.array', images=batch, visualize=False).images#.squeeze()
-        end_time = time.time()
+        if torch.cuda.is_available() and pipeline.device.type == "cuda":
+            torch.cuda.synchronize()
+        start_time = time.perf_counter()
+        with torch.inference_mode():
+            output = pipeline(
+                num_inference_steps=config.num_inference_steps,
+                num_noise_steps=None,
+                batch_size=batch["image"].shape[0],
+                use_inverse=False,
+                output_type="np.array",
+                images=batch,
+                visualize=False,
+            ).images
+        if torch.cuda.is_available() and pipeline.device.type == "cuda":
+            torch.cuda.synchronize()
+        end_time = time.perf_counter()
 
         output = torch.from_numpy(output).permute(0,3,1,2)
 
-        input_img = pipeline.preprocess(batch)#.squeeze()
+        target_size = pipeline.unet.config.sample_size
+        if isinstance(target_size, int):
+            target_size = (target_size, target_size)
+        input_img = F.interpolate(batch["image"].float(), size=target_size, mode="bilinear", align_corners=False)
         
         elapsed_time = end_time - start_time
         throughput_metric.update(num_processed=batch['image'].shape[0], elapsed_time_sec=elapsed_time)
@@ -56,9 +70,8 @@ def evaluate(pipeline, path, model_path):
             ssim.update(img, out)
             mse.update(img.flatten(), out.flatten())
         
-        #os.mkdir(os.path.join(model_path, "test")) #Move to plot_input_...
-        plot_input_output_batches(batch["image"].numpy(), output.numpy())#, save=f"{model_path}/test/Batch-{idx}.png")
-        break
+        # Optional qualitative plotting (disabled during benchmarking).
+        # plot_input_output_batches(batch["image"].numpy(), output.numpy())
         
     PSNR = psnr.compute()
     SSIM = ssim.compute()
@@ -134,8 +147,8 @@ if __name__ == '__main__':
     
     pipeline = SamplingPipeline.from_pretrained(model_path, use_safetensors=True, conditioning=config.conditioning).to(device)
     
-    #pipeline.inverse_scheduler = "default"
-    pipeline.inverse_scheduler = DDIMInverseScheduler.from_pretrained(model_path+"/scheduler/")
+    # Keep inversion disabled for throughput benchmarking; inverse diffusion is much heavier.
+    pipeline.inverse_scheduler = "default"
     
     
     pipeline.scheduler = config.scheduler.from_pretrained(model_path+"/scheduler/")

@@ -3,7 +3,6 @@ from typing import List, Optional, Tuple, Union, Any, Callable, Dict
 import PIL
 import torch
 import torch.nn.functional as F
-from skimage.transform import resize
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -50,15 +49,22 @@ class SamplingPipeline(DiffusionPipeline):
         self.inverse_scheduler = inverse_scheduler
         
     def preprocess(self, image):
-    
-        image = image['image'].cpu().numpy()
-    
+        image = image["image"]
         if image.ndim == 2:
             image = image.unsqueeze(0).unsqueeze(0)
-            
-        image = resize(image.astype(np.float32), (image.shape[0], 1, self.unet.config.sample_size, self.unet.config.sample_size))
-        
-        return torch.as_tensor(image).float().contiguous()#.unsqueeze(0).unsqueeze(0) 
+        elif image.ndim == 3:
+            image = image.unsqueeze(1)
+
+        size = self.unet.config.sample_size
+        if isinstance(size, int):
+            target_hw = (size, size)
+        else:
+            target_hw = tuple(size)
+
+        image = F.interpolate(
+            image.float(), size=target_hw, mode="bilinear", align_corners=False
+        )
+        return image.contiguous()
         
     def postprocess(self, image):
         return image#*(self.MAX_B - self.MIN_B) + self.MIN_B
@@ -242,6 +248,7 @@ class SamplingPipeline(DiffusionPipeline):
         images: torch.Tensor = None,
         num_inference_steps: int = 1000,
         num_noise_steps=None,
+        use_inverse: bool = False,
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
         visualize: bool = True,
@@ -313,7 +320,7 @@ class SamplingPipeline(DiffusionPipeline):
 
             # Add noise to the clean images according to the noise magnitude at each timestep
             # (this is the forward diffusion process)
-            if isinstance(self.inverse_scheduler, SchedulerMixin):
+            if use_inverse and isinstance(self.inverse_scheduler, SchedulerMixin):
                 noisy_images = self.invert(
                     images,
                     num_inference_steps=num_inference_steps,
