@@ -2,14 +2,7 @@ import time
 
 from dataclasses import dataclass
 
-from diffusers import (
-    DDPMScheduler,
-    DDIMScheduler,
-    DPMSolverMultistepScheduler,
-    DPMSolverSDEScheduler,
-    UniPCMultistepScheduler,
-    FlowMatchEulerDiscreteScheduler,
-)  # , EDMEulerScheduler
+from diffusers import DDPMScheduler, DDIMScheduler, DPMSolverMultistepScheduler, DPMSolverSDEScheduler, FlowMatchEulerDiscreteScheduler, UniPCMultistepScheduler#, EDMEulerScheduler
 from diffusers import DDPMPipeline, DDIMPipeline
 
 @dataclass
@@ -30,7 +23,7 @@ class TrainingConfig:
 	scheduler = FlowMatchEulerDiscreteScheduler
 	pipeline = DDPMPipeline #DDPM as Default for most schedulers
 	
-	conditioning = "concatenate" #"concatenate", None, "dual"
+	conditioning = "concatenate" #"dual" #"concatenate", None, "dual"
 	
 	slices = 1
 	channels = 1

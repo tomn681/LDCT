@@ -8,9 +8,11 @@ from skimage.transform import resize
 import numpy as np
 import matplotlib.pyplot as plt
 
+from diffusers import DDPMScheduler
 from diffusers import DiffusionPipeline, ImagePipelineOutput, SchedulerMixin
 from diffusers.utils.torch_utils import randn_tensor
 
+from config import TrainingConfig
 
 class SamplingPipeline(DiffusionPipeline):
     r"""
@@ -27,7 +29,7 @@ class SamplingPipeline(DiffusionPipeline):
             [`DDPMScheduler`], or [`DDIMScheduler`].
         inverse_scheduler (Optional[`SchedulerMixin`]):
             A scheduler to be used in combination with `unet` for noise addition. Can be 'default' for standard
-            random noise addition, None for no noise addition or [`DDIMInverseScheduler`].
+            random noise addition, 'DDPM' for compatibility, None for no noise addition or [`DDIMInverseScheduler`].
         conditioning (Optional[`str`])
             Model conditioning type. Use 'concatenate' if model is conditional by channel-wise concatenation, 
             'dual' for dual input conditionind or None if model is not conditional.
@@ -49,9 +51,12 @@ class SamplingPipeline(DiffusionPipeline):
         self.scheduler = scheduler
         self.inverse_scheduler = inverse_scheduler
         
-    def preprocess(self, image):
+        if inverse_scheduler == 'DDPM':
+            self.ddpm_scheduler = DDPMScheduler(num_train_timesteps = config.num_train_timesteps)
+        
+    def preprocess(self, image, cls='image'):
     
-        image = image['image'].cpu().numpy()
+        image = image[cls].cpu().numpy()
     
         if image.ndim == 2:
             image = image.unsqueeze(0).unsqueeze(0)
@@ -179,12 +184,17 @@ class SamplingPipeline(DiffusionPipeline):
 
         # 7. Denoising loop where we obtain the cross-attention maps.
         num_warmup_steps = len(timesteps) - num_inference_steps * self.inverse_scheduler.order
-        with self.progress_bar(total=num_inference_steps - 2) as progress_bar:
+        with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps[1:-1]):
                 latent_model_input = self.inverse_scheduler.scale_model_input(image, t)
-
+                
                 # predict the noise residual
-                noise_pred = self.unet(latent_model_input, t).sample
+                if self.conditioning == "concatenate":
+                    model_input = torch.cat((latent_model_input, image), dim=1)
+                    noise_pred = self.unet(model_input, t).sample
+
+                else:
+                    noise_pred = self.unet(latent_model_input, t).sample
 
                 # regularization of the noise prediction
                 with torch.enable_grad():
@@ -235,6 +245,41 @@ class SamplingPipeline(DiffusionPipeline):
 
         return ImagePipelineOutput(inverted_latents)
 
+    def _force_timesteps(self, mode, num_inference_steps):
+        """
+        Asigna los timesteps personalizados para modo 'last' incluso si el scheduler no los acepta explícitamente.
+        Si el scheduler no acepta el argumento `timesteps`, los setea manualmente.
+        """
+        if mode == 'last':
+            # 1. Generar todos los timesteps del entrenamiento
+            self.scheduler.set_timesteps(num_inference_steps=self.scheduler.config.num_train_timesteps, device=self.device)
+
+            if not hasattr(self.scheduler, "timesteps"):
+                raise ValueError(f"Scheduler {type(self.scheduler).__name__} has no `.timesteps` attribute.")
+
+            full_timesteps = self.scheduler.timesteps
+            custom_timesteps = full_timesteps[-num_inference_steps:]  # ✅ últimos pasos (inicio de denoising)
+
+            # Asegurar que sea un np.ndarray
+            if isinstance(custom_timesteps, torch.Tensor):
+                custom_timesteps = custom_timesteps.cpu().numpy()
+            custom_timesteps = np.array(custom_timesteps).astype(np.int64)
+
+            # 2. Intentar pasar como argumento si es compatible
+            try:
+                self.scheduler.set_timesteps(timesteps=custom_timesteps, device=self.device)
+            except TypeError:
+                # 3. Si falla, sobrescribir directamente
+                print(f"⚠️ Forcing `timesteps` manually into {type(self.scheduler).__name__}")
+                self.scheduler.set_timesteps(num_inference_steps=self.scheduler.config.num_train_timesteps, device=self.device)
+                self.scheduler.timesteps = custom_timesteps
+                self.scheduler.num_inference_steps = len(custom_timesteps)
+
+        else:
+            # modo 'equal' o default
+            self.scheduler.set_timesteps(num_inference_steps=num_inference_steps, device=self.device)
+
+
     @torch.no_grad()
     def __call__(
         self,
@@ -283,6 +328,8 @@ class SamplingPipeline(DiffusionPipeline):
                 If `return_dict` is `True`, [`~pipelines.ImagePipelineOutput`] is returned, otherwise a `tuple` is
                 returned where the first element is a list with the generated images
         """
+        num_inference_steps = num_inference_steps - 1
+        
         # Sample gaussian noise to begin loop
         if isinstance(self.unet.config.sample_size, int):
             image_shape = (
@@ -317,8 +364,12 @@ class SamplingPipeline(DiffusionPipeline):
                 noisy_images = self.invert(
                     images,
                     num_inference_steps=num_inference_steps,
-                    output_type="torch",
-                ).images
+                    output_type="torch").images
+                    
+            elif self.inverse_scheduler == "DDPM":
+                noise = torch.randn(images.shape).to(self.device)
+                noisy_images = self.ddpm_scheduler.add_noise(images, noise, timesteps)
+                
             elif self.inverse_scheduler == "default":
                 noise = torch.randn(images.shape).to(self.device)
                 if hasattr(self.scheduler, "add_noise"):
@@ -329,14 +380,8 @@ class SamplingPipeline(DiffusionPipeline):
             else:
                 noisy_images = images
 
-        # set step values
-        self.scheduler.set_timesteps(num_inference_steps)
-        
-        '''
-        OVERRIDE
-        '''
-        #self.scheduler.timesteps = torch.arange(timesteps-1, 0, -1)
-        
+        self._force_timesteps(mode, num_inference_steps)
+
         self.unet.eval()
         
         if visualize:
@@ -392,7 +437,7 @@ class SamplingPipeline(DiffusionPipeline):
                 index = np.where(sampled_values == int(t))[0]-1
                 row = (index-displace) // cols
                 col = (index-displace) % cols + lg_size
-                
+
                 ax = fig.add_subplot(grid[row, col])
                 ax.imshow(noisy_images[0].cpu().permute(1,2,0).numpy(), cmap='gray')
                 ax.axis('off')
@@ -410,7 +455,8 @@ class SamplingPipeline(DiffusionPipeline):
             plt.show()
             ##############################################################################33333
 
-        noisy_images = (noisy_images / 2 + 0.5).clamp(0, 1) #################################################################33
+        #noisy_images = (noisy_images / 2 + 0.5).clamp(0, 1) #################################################################33
+        noisy_images = noisy_images.clamp(0, 1)
         noisy_images = noisy_images.cpu().permute(0, 2, 3, 1).numpy()
         if output_type == "pil":
             noisy_images = self.numpy_to_pil(noisy_images)
