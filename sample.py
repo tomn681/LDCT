@@ -41,7 +41,7 @@ def evaluate(pipeline, path, model_path):
     
         start_time = time.time()
         output = pipeline(num_inference_steps=config.num_inference_steps, num_noise_steps=None, batch_size=config.eval_batch_size, 
-                            output_type='np.array', images=batch).images#.squeeze()
+                            output_type='np.array', images=batch, visualize=False).images#.squeeze()
         end_time = time.time()
 
         output = torch.from_numpy(output).permute(0,3,1,2)

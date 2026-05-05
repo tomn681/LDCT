@@ -244,6 +244,7 @@ class SamplingPipeline(DiffusionPipeline):
         num_noise_steps=None,
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
+        visualize: bool = True,
     ) -> Union[ImagePipelineOutput, Tuple]:
         r"""
         The call function to the pipeline for generation.
@@ -338,35 +339,38 @@ class SamplingPipeline(DiffusionPipeline):
         
         self.unet.eval()
         
-        ######################33
-      
-        samples = 15
-        cols = 5
-        lg_size = 2
-        
-        # Compute number of rows and columns
-        n_cols = cols + lg_size
-        n_rows = samples // (n_cols - lg_size)
-        
-        log_space = np.logspace(0, 1, samples+1, base=10.0) - 1
-        log_space = log_space / log_space[-1]
-        sampled_values = (num_inference_steps-1) * log_space
-        sampled_values = np.unique(sampled_values.astype(int))
-        displace = 0
-        
-        if len(sampled_values) < samples and num_inference_steps >= samples:
-            full_range = np.arange(0, num_inference_steps)
-            missing_values = np.setdiff1d(full_range, sampled_values)
-            missing_values = missing_values[:samples-len(sampled_values)+1]
-            sampled_values = np.sort(np.concatenate((sampled_values, missing_values)))
+        if visualize:
+            ######################33
+          
+            samples = 15
+            cols = 5
+            lg_size = 2
             
-        
-        if num_inference_steps < samples:
-            full_range = np.arange(0, num_inference_steps)
-            displace = samples - num_inference_steps
-        
-        fig = plt.figure(figsize=(n_cols * 4, n_rows * 4))
-        grid = plt.GridSpec(n_rows, n_cols, wspace=0.1, hspace=0.1)
+            # Compute number of rows and columns
+            n_cols = cols + lg_size
+            n_rows = samples // (n_cols - lg_size)
+            
+            log_space = np.logspace(0, 1, samples+1, base=10.0) - 1
+            log_space = log_space / log_space[-1]
+            sampled_values = (num_inference_steps-1) * log_space
+            sampled_values = np.unique(sampled_values.astype(int))
+            displace = 0
+            
+            if len(sampled_values) < samples and num_inference_steps >= samples:
+                full_range = np.arange(0, num_inference_steps)
+                missing_values = np.setdiff1d(full_range, sampled_values)
+                missing_values = missing_values[:samples-len(sampled_values)+1]
+                sampled_values = np.sort(np.concatenate((sampled_values, missing_values)))
+                
+            
+            if num_inference_steps < samples:
+                full_range = np.arange(0, num_inference_steps)
+                displace = samples - num_inference_steps
+            
+            fig = plt.figure(figsize=(n_cols * 4, n_rows * 4))
+            grid = plt.GridSpec(n_rows, n_cols, wspace=0.1, hspace=0.1)
+        else:
+            sampled_values = np.array([])  # Empty array so no visualization happens
 
         ######################33
 
@@ -384,7 +388,7 @@ class SamplingPipeline(DiffusionPipeline):
             noisy_images = self.scheduler.step(model_output, t, noisy_images).prev_sample
             
             ######################################################################3333333333333
-            if int(t) in sampled_values:
+            if visualize and int(t) in sampled_values:
                 index = np.where(sampled_values == int(t))[0]-1
                 row = (index-displace) // cols
                 col = (index-displace) % cols + lg_size
@@ -394,15 +398,16 @@ class SamplingPipeline(DiffusionPipeline):
                 ax.axis('off')
                 ax.set_title(f"Step {t+1}")
              
-        row = -1
-        col = -1
-                   
-        ax_main = fig.add_subplot(grid[:, :lg_size]) 
-        ax_main.imshow(noisy_images[0].cpu().permute(1,2,0).numpy(), cmap='gray')
-        ax_main.axis('off')
-        ax_main.set_title(f"Final Step")
-            
-        plt.show()
+        if visualize:
+            row = -1
+            col = -1
+                       
+            ax_main = fig.add_subplot(grid[:, :lg_size]) 
+            ax_main.imshow(noisy_images[0].cpu().permute(1,2,0).numpy(), cmap='gray')
+            ax_main.axis('off')
+            ax_main.set_title(f"Final Step")
+                
+            plt.show()
             ##############################################################################33333
 
         noisy_images = (noisy_images / 2 + 0.5).clamp(0, 1) #################################################################33
