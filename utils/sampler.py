@@ -315,24 +315,26 @@ class SamplingPipeline(DiffusionPipeline):
             images = images.to(self.device)
 
             bs = images.shape[0]
-
+ 
             timesteps = torch.tensor(num_inference_steps).long()
-
+            
             # Add noise to the clean images according to the noise magnitude at each timestep
             # (this is the forward diffusion process)
+<<<<<<< HEAD
             if use_inverse and isinstance(self.inverse_scheduler, SchedulerMixin):
                 noisy_images = self.invert(
                     images,
+=======
+            if isinstance(self.inverse_scheduler, SchedulerMixin):
+                noisy_images = self.invert(images,
+>>>>>>> parent of ee10fb7 (Solved training issues in flow matching models)
                     num_inference_steps=num_inference_steps,
-                    output_type="torch",
-                ).images
+                    output_type="torch").images
+                    
             elif self.inverse_scheduler == "default":
                 noise = torch.randn(images.shape).to(self.device)
-                if hasattr(self.scheduler, "add_noise"):
-                    noisy_images = self.scheduler.add_noise(images, noise, timesteps - 1)
-                else:
-                    # For flow-matching schedulers, there is no add_noise; treat the provided image as the starting state.
-                    noisy_images = images
+                noisy_images = self.scheduler.add_noise(images, noise, timesteps-1)
+                    
             else:
                 noisy_images = images
 
