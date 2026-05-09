@@ -321,9 +321,14 @@ class SamplingPipeline(DiffusionPipeline):
             # Add noise to the clean images according to the noise magnitude at each timestep
             # (this is the forward diffusion process)
 <<<<<<< HEAD
+<<<<<<< HEAD
             if use_inverse and isinstance(self.inverse_scheduler, SchedulerMixin):
                 noisy_images = self.invert(
                     images,
+=======
+            if isinstance(self.inverse_scheduler, SchedulerMixin):
+                noisy_images = self.invert(images,
+>>>>>>> parent of ee10fb7 (Solved training issues in flow matching models)
 =======
             if isinstance(self.inverse_scheduler, SchedulerMixin):
                 noisy_images = self.invert(images,
